@@ -75,31 +75,42 @@
     let currentIndex = 0;
 
     async function loadSheetData() {
-      const sheetId = 'YOUR_GOOGLE_SHEET_ID';
+      const sheetId = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
       const sheetName = 'Orders';
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}?alt=json&key=YOUR_GOOGLE_API_KEY`;
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}?alt=json&key=AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U`;
 
-      const res = await fetch(url);
-      const data = await res.json();
-      const rows = data.values;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const rows = data.values;
 
-      const header = rows[0];
-      const body = rows.slice(1);
+        if (!rows || rows.length <= 1) {
+          document.getElementById('orderItems').innerHTML = '<p>No orders found.</p>';
+          return;
+        }
 
-      const grouped = {};
-      body.forEach(row => {
-        const [orderId, customerName, itemTitle, qty, picked, notes, imageUrl] = row;
-        if (!grouped[orderId]) grouped[orderId] = { orderId, customerName, notes, items: [] };
-        grouped[orderId].items.push({ title: itemTitle, qty, imageUrl });
-      });
+        const header = rows[0];
+        const body = rows.slice(1);
 
-      orders = Object.values(grouped);
-      renderOrder();
+        const grouped = {};
+        body.forEach(row => {
+          const [orderId, customerName, itemTitle, qty, picked, notes, imageUrl] = row;
+          if (!grouped[orderId]) grouped[orderId] = { orderId, customerName, notes, items: [] };
+          grouped[orderId].items.push({ title: itemTitle, qty, imageUrl });
+        });
+
+        orders = Object.values(grouped);
+        renderOrder();
+      } catch (error) {
+        document.getElementById('orderItems').innerHTML = '<p>Error loading orders.</p>';
+        console.error('Fetch error:', error);
+      }
     }
 
     function renderOrder() {
       const order = orders[currentIndex];
       if (!order) return;
+
       document.getElementById('orderId').innerText = `Order ${order.orderId}`;
       document.getElementById('customerName').innerText = order.customerName;
       document.getElementById('orderNotes').innerText = order.notes || '';
@@ -111,6 +122,7 @@
           <input type="checkbox">
         </div>
       `).join('');
+
       document.getElementById('orderItems').innerHTML = itemsHtml;
     }
 
