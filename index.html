@@ -99,23 +99,24 @@
             customerName,
             itemTitle,
             variantTitle,
-            fullTitle,
+            itemFullTitle,
             qty,
             picked,
             notes,
             imageUrl
           ] = row;
 
-          if (!grouped[orderId]) grouped[orderId] = {
-            orderId,
-            customerName,
-            notes,
-            items: []
-          };
+          if (!grouped[orderId]) {
+            grouped[orderId] = {
+              orderId,
+              customerName,
+              notes,
+              items: []
+            };
+          }
 
           grouped[orderId].items.push({
-            title: itemTitle,
-            variant: variantTitle,
+            title: itemFullTitle,
             qty,
             imageUrl
           });
@@ -140,7 +141,7 @@
       const itemsHtml = order.items.map(item => `
         <div class="item">
           <img src="${item.imageUrl}" alt="">
-          <label>${item.qty} × ${item.title} — ${item.variant}</label>
+          <label>${item.qty} × ${item.title}</label>
           <input type="checkbox">
         </div>
       `).join('');
