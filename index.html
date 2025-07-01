@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Designated Warehouse</title>
   <style>
     body {
@@ -94,9 +94,31 @@
 
         const grouped = {};
         body.forEach(row => {
-          const [orderId, customerName, itemTitle, qty, picked, notes, imageUrl] = row;
-          if (!grouped[orderId]) grouped[orderId] = { orderId, customerName, notes, items: [] };
-          grouped[orderId].items.push({ title: itemTitle, qty, imageUrl });
+          const [
+            orderId,
+            customerName,
+            itemTitle,
+            variantTitle,
+            fullTitle,
+            qty,
+            picked,
+            notes,
+            imageUrl
+          ] = row;
+
+          if (!grouped[orderId]) grouped[orderId] = {
+            orderId,
+            customerName,
+            notes,
+            items: []
+          };
+
+          grouped[orderId].items.push({
+            title: itemTitle,
+            variant: variantTitle,
+            qty,
+            imageUrl
+          });
         });
 
         orders = Object.values(grouped);
@@ -118,7 +140,7 @@
       const itemsHtml = order.items.map(item => `
         <div class="item">
           <img src="${item.imageUrl}" alt="">
-          <label>${item.qty} × ${item.title}</label>
+          <label>${item.qty} × ${item.title} — ${item.variant}</label>
           <input type="checkbox">
         </div>
       `).join('');
