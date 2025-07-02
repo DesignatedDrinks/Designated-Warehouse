@@ -1,10 +1,13 @@
 let orders = [];
 let currentIndex = 0;
 
+const packSizes = [28, 24, 12, 10, 8, 6, 5, 4, 1];
+
 async function loadSheetData() {
   const sheetId = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
   const sheetName = 'Orders';
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}?alt=json&key=AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U`;
+  const apiKey = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}?alt=json&key=${apiKey}`;
 
   try {
     const res = await fetch(url);
@@ -16,10 +19,11 @@ async function loadSheetData() {
       return;
     }
 
-    const [headers, ...entries] = rows;
-
+    const header = rows[0];
+    const body = rows.slice(1);
     const grouped = {};
-    entries.forEach(row => {
+
+    body.forEach(row => {
       const [
         orderId,
         customerName,
@@ -42,8 +46,10 @@ async function loadSheetData() {
       }
 
       grouped[orderId].items.push({
-        title: itemFullTitle,
-        qty: parseInt(qty),
+        title: itemTitle,
+        variant: variantTitle,
+        fullTitle: itemFullTitle,
+        qty: parseInt(qty, 10),
         imageUrl
       });
     });
@@ -64,24 +70,51 @@ function renderOrder() {
   document.getElementById('customerName').innerText = order.customerName;
   document.getElementById('noteText').innerText = order.notes || 'None';
 
-  const itemsHtml = order.items.map(item => `
-    <div class="item">
-      <img src="${item.imageUrl}" alt="${item.title}" />
-      <label>${item.qty} × ${item.title}</label>
-      <input type="checkbox" />
-    </div>
-  `).join('');
+  let totalCans = 0;
+  let itemsHtml = '';
+
+  order.items.forEach(item => {
+    const packQty = getPackQuantity(item.variant);
+    const canCount = item.qty * packQty;
+    totalCans += canCount;
+
+    itemsHtml += `
+      <div class="item-card">
+        <img src="${item.imageUrl}" alt="${item.title}" />
+        <div>
+          <strong>${item.title}</strong><br/>
+          Variant: ${item.variant}<br/>
+          Quantity: ${item.qty} × ${packQty} cans = ${canCount}
+        </div>
+      </div>
+    `;
+  });
 
   document.getElementById('itemsContainer').innerHTML = itemsHtml;
-
-  const totalCans = order.items.reduce((sum, item) => sum + item.qty, 0);
   document.getElementById('totalCans').innerText = totalCans;
+  document.getElementById('boxCalculation').innerHTML = formatBoxBreakdown(totalCans);
+}
 
-  const boxCount = Math.ceil(totalCans / 24);
-  document.getElementById('boxCount').innerText = boxCount;
+function getPackQuantity(variant) {
+  const match = variant.match(/(\d+)[\s-]*pack/i);
+  return match ? parseInt(match[1], 10) : 1;
+}
 
-  const packSummary = order.items.map(item => `${item.qty} × ${item.title}`).join('<br>');
-  document.getElementById('packSummary').innerHTML = packSummary;
+function formatBoxBreakdown(totalCans) {
+  let remaining = totalCans;
+  let boxSummary = '';
+  let totalBoxes = 0;
+
+  packSizes.forEach(size => {
+    const count = Math.floor(remaining / size);
+    if (count > 0) {
+      boxSummary += `${count} × ${size}-pack box<br/>`;
+      totalBoxes += count;
+      remaining %= size;
+    }
+  });
+
+  return `<strong>Boxes Required:</strong><br/>${boxSummary}<strong>Total Boxes:</strong> ${totalBoxes}`;
 }
 
 document.getElementById('prevBtn').addEventListener('click', () => {
