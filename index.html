@@ -1,24 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="order-container">
-    <div class="order-header">
-      <h2 id="orderId" class="order-id">Order #…</h2>
+  <div id="orderContainer" class="order-container">
+    <header class="order-header">
+      <h2 id="orderId">Loading…</h2>
       <span id="customerName" class="customer-name"></span>
-    </div>
-    <div id="orderNotes" class="order-notes"></div>
-    <div id="orderItems" class="order-items"></div>
+    </header>
+    <div id="shippingAddress" class="shipping-address"></div>
+    <section id="boxSummary" class="box-summary"></section>
+    <section id="itemsContainer" class="items-container"></section>
     <div class="nav-buttons">
       <button id="prevBtn" class="nav-btn">← Prev</button>
       <button id="nextBtn" class="nav-btn">Next →</button>
     </div>
   </div>
-  <script src="script.js"></script>
+
+  <script src="app.js"></script>
 </body>
 </html>
