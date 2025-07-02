@@ -1,191 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Designated Warehouse</title>
-  <style>
-    body {
-      font-family: "Helvetica Neue", sans-serif;
-      margin: 0;
-      padding: 2rem;
-      background-color: #f8f8f8;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: #fff;
-      padding: 2rem;
-      border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    }
-    .order-header {
-      display: flex;
-      justify-content: space-between;
-      font-weight: bold;
-      font-size: 1.4rem;
-      margin-bottom: 1rem;
-    }
-    .note-box {
-      padding: 1rem;
-      background: #fffbe6;
-      border-left: 5px solid #f9c74f;
-      margin-bottom: 1.5rem;
-    }
-    .order-items {
-      border-top: 2px solid #eee;
-      padding-top: 1rem;
-    }
-    .item {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      padding: 1rem 0;
-      border-bottom: 1px solid #eee;
-    }
-    .item img {
-      width: 60px;
-      height: 60px;
-      object-fit: contain;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    .item-desc {
-      flex-grow: 1;
-    }
-    .item-desc strong {
-      font-size: 1.1rem;
-      display: block;
-    }
-    .item input[type="checkbox"] {
-      transform: scale(1.5);
-    }
-    .footer {
-      margin-top: 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 1rem;
-    }
-    .footer input {
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    .nav-buttons {
-      text-align: center;
-      margin-top: 2rem;
-    }
-    .nav-buttons button {
-      padding: 0.6rem 1.2rem;
-      margin: 0 0.5rem;
-      font-size: 1rem;
-    }
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <div class="order-header">
-      <div id="orderId">Order #...</div>
-      <div id="customerName"></div>
+  <div class="wrapper">
+    <div class="header">
+      <img class="logo" src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/DDWebLogo_16868bc4-aabb-450a-b2d8-c08b8887d129.png?v=1664817757" alt="Designated Drinks Logo">
+      <h2 id="orderId">Order #</h2>
+      <p id="customerName">Customer Name</p>
     </div>
-    <div id="orderNotes" class="note-box"></div>
-    <div id="orderItems" class="order-items"></div>
-    <div class="footer">
-      <div id="boxSummary">Total Boxes: ...</div>
-      <div>
-        Picked by: <input type="text" placeholder="Name" />
+
+    <div class="boxes">
+      <p><strong>Boxes Required:</strong></p>
+      <p id="boxCalculation">Calculating...</p>
+    </div>
+
+    <div class="summary" id="summaryContainer">
+      <h3>Order Summary</h3>
+      <div id="packSummary"></div>
+      <div class="summary-item summary-total">
+        <span>Total Cans:</span>
+        <span id="totalCans">0</span>
       </div>
     </div>
-    <div class="nav-buttons">
-      <button onclick="prevOrder()">⬅ Prev</button>
-      <button onclick="nextOrder()">Next ➡</button>
+
+    <div class="items" id="itemsContainer"></div>
+
+    <div class="notes" id="orderNotes">
+      <p><strong>Notes:</strong></p>
+      <p id="noteText"></p>
+    </div>
+
+    <div class="pickedBy">
+      <p><strong>Picked by:</strong> ________________________</p>
+    </div>
+
+    <div class="navigation">
+      <button id="prevBtn">← Prev</button>
+      <button id="nextBtn">Next →</button>
     </div>
   </div>
-  <script>
-    let orders = [];
-    let currentIndex = 0;
 
-    async function loadSheetData() {
-      const sheetId = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-      const sheetName = 'Orders';
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}?alt=json&key=AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U`;
-
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-        const rows = data.values;
-
-        if (!rows || rows.length <= 1) {
-          document.getElementById('orderItems').innerHTML = '<p>No orders found.</p>';
-          return;
-        }
-
-        const body = rows.slice(1);
-        const grouped = {};
-        body.forEach(row => {
-          const [orderId, customerName, , , itemFullTitle, qty, , notes, imageUrl] = row;
-          if (!grouped[orderId]) grouped[orderId] = { orderId, customerName, notes, items: [] };
-          grouped[orderId].items.push({ title: itemFullTitle, qty: parseInt(qty), imageUrl });
-        });
-
-        orders = Object.values(grouped);
-        renderOrder();
-      } catch (error) {
-        document.getElementById('orderItems').innerHTML = '<p>Error loading orders.</p>';
-        console.error('Fetch error:', error);
-      }
-    }
-
-    function renderOrder() {
-      const order = orders[currentIndex];
-      if (!order) return;
-
-      document.getElementById('orderId').innerText = `Order ${order.orderId}`;
-      document.getElementById('customerName').innerText = order.customerName;
-      document.getElementById('orderNotes').innerText = order.notes || '';
-
-      const itemsHtml = order.items.map(item => `
-        <div class="item">
-          <img src="${item.imageUrl}" alt="" onerror="this.src='https://via.placeholder.com/60'">
-          <div class="item-desc">
-            <strong>${item.title}</strong>
-            Qty: ${item.qty}
-          </div>
-          <input type="checkbox">
-        </div>
-      `).join('');
-
-      document.getElementById('orderItems').innerHTML = itemsHtml;
-      document.getElementById('boxSummary').innerText = `Total Boxes: ${calculateBoxes(order.items)}`;
-    }
-
-    function calculateBoxes(items) {
-      let totalCans = 0;
-      items.forEach(item => {
-        const qty = item.qty || 1;
-        const match = item.title.match(/(\d+)\s*Pack/i);
-        const packSize = match ? parseInt(match[1]) : 1;
-        totalCans += qty * packSize;
-      });
-      return Math.ceil(totalCans / 24); // 24 cans per box
-    }
-
-    function prevOrder() {
-      if (currentIndex > 0) {
-        currentIndex--;
-        renderOrder();
-      }
-    }
-
-    function nextOrder() {
-      if (currentIndex < orders.length - 1) {
-        currentIndex++;
-        renderOrder();
-      }
-    }
-
-    loadSheetData();
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
