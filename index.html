@@ -2,36 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-  <header class="sticky-header">
-    <div class="header-left">
-      <button id="prevBtn" aria-label="Previous order">←</button>
-      <button id="nextBtn" aria-label="Next order">→</button>
+  <!-- Stats Dashboard -->
+  <div class="stats-cards">
+    <div class="stat-card">
+      <div class="stat-number" id="stat-pending">0</div>
+      <div class="stat-label">Pending Orders</div>
     </div>
-    <div class="header-center">
-      <h1 id="orderId">Order #…</h1>
-      <div id="customerName" class="customer-info">Customer Name</div>
-      <div id="customerAddress" class="customer-info small">123 Main St, Calgary, AB</div>
+    <div class="stat-card">
+      <div class="stat-number" id="stat-cans">0</div>
+      <div class="stat-label">Total Cans</div>
     </div>
-    <div class="header-right">
-      <input id="jumpInput" type="number" placeholder="Jump to #" min="1" />
-      <button id="jumpBtn">Go</button>
-      <button id="darkToggle" aria-label="Toggle dark mode">🌓</button>
+    <div class="stat-card">
+      <div class="stat-number" id="stat-boxes">0</div>
+      <div class="stat-label">Boxes Needed</div>
     </div>
-  </header>
+  </div>
 
-  <div id="boxInline" class="boxes-inline">Calculating boxes…</div>
+  <!-- Pack-size chart -->
+  <canvas id="packChart" width="400" height="100"></canvas>
 
-  <main id="itemsContainer" class="items-list">
-    <!-- skeleton cards while loading -->
-    <div class="skeleton-card"></div>
-    <div class="skeleton-card"></div>
-    <div class="skeleton-card"></div>
-  </main>
+  <!-- Main Order Viewer -->
+  <div class="order-container" id="orderContainer">
+    <div class="order-header">
+      <button id="prevBtn" class="nav-btn">⟵</button>
+      <h2 id="orderId">Order #...</h2>
+      <button id="nextBtn" class="nav-btn">⟶</button>
+    </div>
+    <div id="customerAddress" class="address">...</div>
+    <div id="boxCalculation" class="boxes">Calculating...</div>
+    <div id="itemsContainer" class="order-items"></div>
+    <button id="completeBtn" class="complete-btn">✅ Mark Complete & Next</button>
+  </div>
 
   <script src="script.js"></script>
 </body>
