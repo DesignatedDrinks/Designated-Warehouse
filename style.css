@@ -1,81 +1,90 @@
-/* Base reset */
-* { margin:0; padding:0; box-sizing:border-box; }
+/* dark background + card styling */
 
 body {
+  margin: 0;
   background: #121212;
-  color: #fafafa;
-  font-family: -apple-system, Roboto, sans-serif;
-  padding: 1rem;
+  color: #eee;
+  font-family: sans-serif;
 }
-
 .order-container {
-  max-width: 480px;
-  margin: 0 auto;
-  background: #1f1f1f;
+  max-width: 640px;
+  margin: 2rem auto;
+  background: #1e1e1e;
   border-radius: 8px;
   padding: 1rem;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }
-
 .order-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #333;
-  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
 }
-
-.order-id {
-  font-size: 1.4rem;
-  font-weight: 600;
+.order-header h2 {
+  font-size: 1.2rem;
+  margin: 0;
 }
-
 .customer-name {
+  font-size: 1rem;
+  opacity: 0.85;
+}
+
+.shipping-address {
   font-size: 0.9rem;
-  color: #bbb;
+  margin-bottom: 1rem;
+  color: #aaa;
 }
 
-.order-notes {
-  font-style: italic;
-  font-size: 0.9rem;
-  margin: 0.5rem 0;
-  color: #999;
+.box-summary {
+  background: #2a2a2a;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+.box-summary strong {
+  display: block;
+  margin-bottom: 0.4rem;
 }
 
-.order-items {
-  margin: 1rem 0;
+.items-container {
+  margin-bottom: 1rem;
 }
-
-.item {
+.item-card {
   display: flex;
   align-items: center;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #333;
+  padding: 0.6rem 0;
+  border-top: 1px solid #333;
 }
-
-.item img {
+.item-card:first-child {
+  border-top: none;
+}
+.item-card img {
   width: 50px;
   height: 50px;
   object-fit: contain;
-  margin-right: 1rem;
   border-radius: 4px;
+  margin-right: 1rem;
+  background: #333;
 }
-
-.item-details {
-  flex: 1;
-  font-size: 0.9rem;
-  line-height: 1.2;
+.item-details p {
+  margin: 0.2rem 0;
+  font-size: 0.95rem;
 }
 
 .nav-buttons {
   display: flex;
   justify-content: space-between;
 }
-
 .nav-btn {
   background: #333;
-  color: #fafafa;
   border: none;
+  color: #eee;
   padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
+}
+.nav-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
