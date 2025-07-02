@@ -1,176 +1,120 @@
-let orders = [];
-let currentIndex = 0;
-let chart = null;
+const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+const sheetName = 'Orders';
+const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
+const url       = `https://sheets.googleapis.com/v4/spreadsheets/
+  ${sheetId}/values/${sheetName}?key=${apiKey}`.replace(/\s+/g,'');
 
-// 1) Fetch & group your Shopify orders from Sheets
-async function loadSheetData() {
-  const sheetId    = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-  const sheetName  = 'Orders';
-  const apiKey     = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
-  const url        = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetName}?alt=json&key=${apiKey}`;
+let orders = [], idx = 0;
 
+async function loadOrders() {
   try {
     const res  = await fetch(url);
-    const json = await res.json();
-    const rows = json.values || [];
+    const js   = await res.json();
+    const rows = js.values || [];
+    if (rows.length < 2) throw new Error('No data');
 
-    if (rows.length <= 1) {
-      document.getElementById('itemsContainer').innerHTML = '<p>No orders found.</p>';
-      return;
-    }
+    const [hdr, ...data] = rows;
+    const mapCol = col => hdr.indexOf(col);
 
-    const body = rows.slice(1);
-    const grouped = {};
+    data.forEach(r => {
+      const orderId        = r[mapCol('orderId')];
+      const customerName   = r[mapCol('customerName')];
+      const address        = r[mapCol('address')];
+      const title          = r[mapCol('itemTitle')];
+      const variant        = r[mapCol('variantTitle')];
+      const qty            = parseInt(r[mapCol('qty')],10) || 0;
+      const imageUrl       = r[mapCol('imageUrl')] || '';
 
-    body.forEach(r => {
-      const [
-        orderId, customerName, itemTitle,
-        variantTitle, /*col4*/, qtyStr,
-        /*picked*/, notes, imageUrl, address = ''
-      ] = r;
-
-      const qty = parseInt(qtyStr,10) || 0;
-      const m   = variantTitle.match(/(\d+)\s*pack/i);
-      const packSize = m ? parseInt(m[1],10) : 1;
-
-      if (!grouped[orderId]) {
-        grouped[orderId] = {
-          orderId,
-          customerName,
-          customerAddress: address,
-          items: [],
-          totalCans: 0
-        };
+      let o = orders.find(o=>o.orderId===orderId);
+      if (!o) {
+        o = { orderId, customerName, address, items: [], totalCans: 0 };
+        orders.push(o);
       }
-
-      grouped[orderId].items.push({ title: itemTitle, qty, packSize, imageUrl });
-      grouped[orderId].totalCans += qty * packSize;
+      // convert variant "4 Pack" → size 4
+      const sizeMatch = variant.match(/(\d+)\s*Pack/i);
+      const size = sizeMatch ? +sizeMatch[1] : 1;
+      o.items.push({ title, qty, size, imageUrl });
+      o.totalCans += qty * size;
     });
 
-    orders = Object.values(grouped);
-
-    // restore last‐seen index
-    const saved = parseInt(localStorage.getItem('lastOrder'),10);
-    if (!isNaN(saved) && saved < orders.length) currentIndex = saved;
-
-    initDashboard();
-    renderOrder();
-  } catch (err) {
+    render();
+  } catch(err) {
+    document.getElementById('itemsList').innerHTML =
+      `<p style="color:tomato; text-align:center;">Error loading orders</p>`;
     console.error(err);
-    document.getElementById('itemsContainer').innerHTML = '<p>Error loading orders.</p>';
   }
 }
 
-// 2) Simple box‐calculator (only 24/12/6 packs)
-function calculateBoxes(totalCans) {
+function calculateBoxes(total) {
   const sizes = [24,12,6];
-  let rem     = totalCans;
-  const counts = {};
-
-  sizes.forEach(sz => {
-    const cnt = Math.floor(rem/sz);
-    if (cnt>0) {
-      counts[sz] = cnt;
-      rem %= sz;
+  const result = [];
+  let rem = total;
+  sizes.forEach(s => {
+    const c = Math.floor(rem/s);
+    if(c) {
+      result.push(`${c} × ${s}-pack box`);
+      rem -= c*s;
     }
   });
-
-  return counts;
+  return result;
 }
 
-// 3) Build your stats cards + Chart.js
-function initDashboard() {
-  const pending   = orders.length;
-  const totalCans = orders.reduce((s,o)=>s+o.totalCans,0);
-  const totalBoxes = orders.reduce((s,o)=> {
-    const bc = calculateBoxes(o.totalCans);
-    return s + Object.values(bc).reduce((a,b)=>a+b,0);
-  },0);
-
-  document.getElementById('stat-pending').innerText = pending;
-  document.getElementById('stat-cans').innerText    = totalCans;
-  document.getElementById('stat-boxes').innerText  = totalBoxes;
-
-  // Chart for box‐size distribution
-  const ctx = document.getElementById('packChart').getContext('2d');
-  const sizes = [6,12,24];
-  const data  = sizes.map(sz=>
-    orders.reduce((sum,o)=>
-      sum + (calculateBoxes(o.totalCans)[sz]||0)
-    ,0)
-  );
-
-  if (chart) chart.destroy();
-  chart = new Chart(ctx, {
-    type:'bar',
-    data:{
-      labels: sizes.map(s=>`${s}-pack`),
-      datasets:[{
-        data,
-        backgroundColor:['#ff6b6b','#66b3ff','#ffbf00']
-      }]
-    },
-    options:{
-      plugins:{ legend:{ display:false } },
-      scales:{ y:{ display:false } },
-      responsive:true
-    }
-  });
-}
-
-// 4) Render a single order
-function renderOrder() {
-  const o = orders[currentIndex];
-  if (!o) return;
-  localStorage.setItem('lastOrder', currentIndex);
+function render() {
+  if (orders.length===0) return;
+  idx = Math.min(Math.max(idx,0),orders.length-1);
+  const o = orders[idx];
 
   // header
-  document.getElementById('orderId').innerText = `Order #${o.orderId}`;
-  document.getElementById('prevBtn').disabled = currentIndex===0;
-  document.getElementById('nextBtn').disabled = currentIndex===orders.length-1;
-  document.getElementById('customerAddress').innerText = o.customerAddress;
+  document.getElementById('orderNumber').innerText = o.orderId;
+  document.getElementById('customerAddress').innerText = o.address;
 
-  // boxes summary
-  const bc = calculateBoxes(o.totalCans);
-  const lines = Object.entries(bc)
-    .map(([size,c])=>`${c} × ${size}-pack box`)
-    .join('\n');
-  const totalBoxes = Object.values(bc).reduce((a,b)=>a+b,0);
-  document.getElementById('boxCalculation').innerHTML =
-    `<pre>${lines}</pre><strong>Total Boxes: ${totalBoxes}</strong>`;
+  // summary
+  const bs = calculateBoxes(o.totalCans);
+  document.getElementById('boxSummary').innerHTML =
+    `<strong>Boxes Required:</strong><br>${bs.join('<br>')}<br>
+     <strong>Total Boxes:</strong> ${bs.length}`;
+  document.getElementById('totalCans').innerText = o.totalCans;
 
-  // items list
-  document.getElementById('itemsContainer').innerHTML =
-    o.items.map(it=>`
-      <div class="item">
-        <img src="${it.imageUrl}" alt="${it.title}" />
-        <div class="item-info">
-          <p class="item-title">${it.title}</p>
-          <p class="item-qty">${it.qty * it.packSize} cans</p>
-        </div>
+  // items
+  const container = document.getElementById('itemsList');
+  container.innerHTML = o.items.map(item=>`
+    <div class="item-card">
+      <img src="${item.imageUrl}" alt="${item.title}"/>
+      <div class="item-info">
+        <div class="title">${item.title}</div>
+        <div class="qty">${item.qty * item.size} cans</div>
       </div>
-    `).join('');
+    </div>
+  `).join('');
 }
 
-// 5) Navigation & swipe handlers
-document.getElementById('prevBtn').onclick = () => {
-  if (currentIndex>0) { currentIndex--; renderOrder(); }
-};
-document.getElementById('nextBtn').onclick = () => {
-  if (currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
-};
-document.getElementById('completeBtn').onclick = () => {
-  if (currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
-};
+function next() {
+  idx = Math.min(idx+1, orders.length-1);
+  render();
+}
+function prev() {
+  idx = Math.max(idx-1, 0);
+  render();
+}
 
-let startX = 0;
-const container = document.getElementById('orderContainer');
-container.addEventListener('touchstart', e => startX = e.changedTouches[0].screenX);
-container.addEventListener('touchend', e => {
-  const diff = e.changedTouches[0].screenX - startX;
-  if (diff>50 && currentIndex>0)        { currentIndex--; renderOrder(); }
-  else if (diff< -50 && currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
+// mark complete & next
+function completeAndNext() {
+  orders.splice(idx,1);
+  if (idx >= orders.length) idx = orders.length-1;
+  render();
+}
+
+// swipe gestures
+let startX=0;
+document.addEventListener('touchstart', e=> startX=e.touches[0].screenX );
+document.addEventListener('touchend', e=>{
+  const dx = e.changedTouches[0].screenX - startX;
+  if (dx < -50) next();
+  if (dx > 50) prev();
 });
 
-// 6) Kick it all off
-window.addEventListener('load', loadSheetData);
+document.getElementById('nextBtn').addEventListener('click', next);
+document.getElementById('prevBtn').addEventListener('click', prev);
+document.getElementById('completeBtn').addEventListener('click', completeAndNext);
+
+window.addEventListener('load', loadOrders);
