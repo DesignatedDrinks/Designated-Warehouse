@@ -1,155 +1,120 @@
-// ─── CONFIG ───
-const SHEET_ID    = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-const API_KEY     = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
-const ORDERS_TAB  = 'Orders';
-const DIRECT_BASE = 'https://designateddrinks.github.io/Designated-Direct';
-const PACK_SIZES  = [24,12,6];  // only these three sizes
+// CONFIG
+const SHEET_ID   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+const API_KEY    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
+const ORDERS_TAB = 'Orders';
+const DIRECT_URL = 'https://designateddrinks.github.io/Designated-Direct';
 
-// which item titles get a Pick Pack link
-const VARIETY_PACK_NAMES = new Set([
-  "Designated Drinks (Non-Alcoholic) Party Pack 24 Pack",
-  "Designated Drinks (Non-Alcoholic) Dry February - 28 Pack",
-  "Designated Drinks (Non-Alcoholic) IPA Collection 12 Pack",
-  "Designated Drinks (Non-Alcoholic) Canadian Classics 12 Pack",
-  "Designated Drinks (Non-Alcoholic) Low Calorie Collection 24 Pack",
-  "Designated Drinks (Non-Alcoholic) Lager/Pale Ale 12 Pack",
-  "Designated Drinks (Non-Alcoholic) Cocktail Mixer 12 Pack",
-  "Designated Drinks (Non-Alcoholic) Fall Flavour 12 Pack",
-  "Designated Drinks (Non-Alcoholic) DayDrinkin' Sixer",
-  "Designated Drinks (Non-Alcoholic) Savour Summer 12 Pack",
-  "Designated Drinks (Non-Alcoholic) Hop Water 24 Pack",
-  "Designated Drinks (Non-Alcoholic) Debut 12 Pack"
-]);
+// state
+let orders = [], idx = 0;
 
-let orders = [], currentIndex = 0;
-const container = document.getElementById('orderContainer');
+// elements
+const prevBtn   = document.getElementById('prevBtn');
+const nextBtn   = document.getElementById('nextBtn');
+const jumpIn    = document.getElementById('jumpInput');
+const jumpBtn   = document.getElementById('jumpBtn');
+const darkTog   = document.getElementById('darkToggle');
+const orderIdEl = document.getElementById('orderId');
+const custName  = document.getElementById('customerName');
+const custAddr  = document.getElementById('customerAddress');
+const boxInline = document.getElementById('boxInline');
+const mainEl    = document.getElementById('itemsContainer');
 
+// fetch & group
 async function loadData() {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`
-            + `/values/${ORDERS_TAB}?alt=json&key=${API_KEY}`;
-  try {
-    const res  = await fetch(url);
-    const json = await res.json();
-    const rows = json.values || [];
-    if (rows.length < 2) throw new Error('No orders found.');
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}` +
+              `/values/${ORDERS_TAB}?alt=json&key=${API_KEY}`;
+  const res = await fetch(url).then(r=>r.json());
+  const rows = res.values||[];
+  if (rows.length<2) return;
 
-    // Expect columns: orderId, customerName, customerAddress, itemTitle,
-    // variantTitle, qty, picked, notes, imageUrl
-    const grouped = {};
-    rows.slice(1).forEach(r => {
-      let [
-        orderId, customerName, customerAddress,
-        itemTitle, variantTitle, qtyStr, , notes, imageUrl
-      ] = r;
-      const qty      = parseInt(qtyStr,10) || 0;
-      const m        = (variantTitle||'').match(/(\d+)\s*Pack/i);
-      const packSize = m ? +m[1] : 1;
-      const cans     = qty * packSize;
-
-      if (!grouped[orderId]) {
-        grouped[orderId] = {
-          orderId,
-          customerName,
-          customerAddress,
-          notes,
-          totalCans:0,
-          items:[]
-        };
-      }
-      grouped[orderId].items.push({ itemTitle, variantTitle, qty, packSize, imageUrl });
-      grouped[orderId].totalCans += cans;
-    });
-
-    orders = Object.values(grouped);
-    renderOrder();
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById('itemsContainer').innerHTML =
-      `<p style="color:red; padding:1rem;">${err.message}</p>`;
-  }
-}
-
-function calculateBoxes(totalCans) {
-  let rem = totalCans, breakdown = {};
-  PACK_SIZES.forEach(size => {
-    const cnt = Math.floor(rem/size);
-    if (cnt) {
-      breakdown[size] = cnt;
-      rem %= size;
-    }
+  const g = {};
+  rows.slice(1).forEach(r=>{
+    let [oId,name,address,title,variant,qty,,note,img] = r;
+    const q = parseInt(qty,10)||0;
+    const m = (variant.match(/(\d+)\s*Pack/i)||[])[1];
+    const size = m?+m:1;
+    const cans = q*size;
+    if (!g[oId]) g[oId]={oId,name,address,note,items:[],total:0};
+    g[oId].items.push({title,variant,q,img,cans});
+    g[oId].total += cans;
   });
-  return breakdown;
+  orders = Object.values(g);
+  render();
 }
 
-function renderOrder() {
+// box logic (Liquid ported)
+function boxCalc(n) {
+  let lines=[], total=0;
+  if (n<=12)       { lines=["1 × 12-pack box"]; total=1; }
+  else if (n<=24)  { lines=["1 × 24-pack box"]; total=1; }
+  else if (n<=36)  { lines=["1 × 24-pack box","1 × 12-pack box"]; total=2; }
+  else if (n<=48)  { lines=["2 × 24-pack boxes"]; total=2; }
+  else if (n<=60)  { lines=["2 × 24-pack boxes","1 × 12-pack box"]; total=3; }
+  else if (n<=72)  { lines=["3 × 24-pack boxes"]; total=3; }
+  else if (n<=84)  { lines=["3 × 24-pack boxes","1 × 12-pack box"]; total=4; }
+  else if (n<=96)  { lines=["4 × 24-pack boxes"]; total=4; }
+  else if (n<=108) { lines=["4 × 24-pack boxes","1 × 12-pack box"]; total=5; }
+  else if (n<=120) { lines=["5 × 24-pack boxes"]; total=5; }
+  else if (n<=132) { lines=["5 × 24-pack boxes","1 × 12-pack box"]; total=6; }
+  else if (n<=144) { lines=["6 × 24-pack boxes"]; total=6; }
+  else             { lines=["Multiple boxes required"]; total="?"; }
+  return {lines,total};
+}
+
+// render one order
+function render() {
   if (!orders.length) return;
-  const o = orders[currentIndex];
-
-  // Header & address
-  document.getElementById('orderId').innerText      = `Order #${o.orderId}`;
-  document.getElementById('customerName').innerText = o.customerName;
-  document.getElementById('customerAddress').innerText = o.customerAddress || '';
-
-  // Notes
-  document.getElementById('orderNotes').innerText   = o.notes || '';
-
-  // Summary
-  document.getElementById('totalCans').innerText = o.totalCans;
-  const boxes = calculateBoxes(o.totalCans);
-  let boxHtml = '', totalBoxes = 0;
-  for (let [size,cnt] of Object.entries(boxes)) {
-    boxHtml    += `${cnt} × ${size}-pack box<br>`;
-    totalBoxes += cnt;
-  }
-  if (!boxHtml) boxHtml = '0';
-  document.getElementById('boxBreakdown').innerHTML =
-    boxHtml + `<strong>Total Boxes:</strong> ${totalBoxes}`;
-
-  // Items
-  const itemsHtml = o.items.map(item => {
-    const totalItemCans = item.qty * item.packSize;
-    const pickLink = VARIETY_PACK_NAMES.has(item.itemTitle)
-      ? `<a class="pick-link" href="${DIRECT_BASE}?pack=${encodeURIComponent(item.itemTitle)}" target="_blank">Pick Pack</a>`
-      : '';
-    return `
-      <div class="item">
-        <img src="${item.imageUrl||''}" alt="${item.itemTitle}">
-        <div class="details">
-          <p><strong>${item.itemTitle}</strong></p>
-          <p>${totalItemCans} cans</p>
-          ${pickLink}
-        </div>
+  const o = orders[idx];
+  orderIdEl.innerText      = `Order #${o.oId}`;
+  custName.innerText       = o.name;
+  custAddr.innerText       = o.address||'';
+  // boxes
+  const bc = boxCalc(o.total);
+  boxInline.innerHTML = bc.lines.join(' • ') + ` | Total: ${bc.total}`;
+  // items
+  mainEl.innerHTML = o.items.map(it=>`
+    <div class="item-card">
+      <img src="${it.img||''}" alt="${it.title}">
+      <div class="details">
+        <h2>${it.title}</h2>
+        <p>${it.cans} cans</p>
+        ${ it.title.includes('Designated Drinks') 
+            ? `<a class="pick-link" href="${DIRECT_URL}?pack=${encodeURIComponent(it.title)}" target="_blank">Pick Pack</a>`
+            : ''
+        }
       </div>
-    `;
-  }).join('');
-  document.getElementById('itemsContainer').innerHTML = itemsHtml;
+    </div>
+  `).join('');
 
-  // Disable buttons at ends
-  document.getElementById('prevBtn').disabled = currentIndex===0;
-  document.getElementById('nextBtn').disabled = currentIndex===orders.length-1;
+  // buttons
+  prevBtn.disabled = idx===0;
+  nextBtn.disabled = idx===orders.length-1;
 }
 
-// Prev / Next
-document.getElementById('prevBtn').onclick = () => {
-  if (currentIndex > 0) { currentIndex--; renderOrder(); }
+// navigation
+prevBtn.onclick = ()=>{ if(idx>0) idx--,render(); };
+nextBtn.onclick = ()=>{ if(idx<orders.length-1) idx++,render(); };
+jumpBtn.onclick = ()=>{
+  const v = parseInt(jumpIn.value,10)-1;
+  if (v>=0&&v<orders.length) { idx=v; render(); }
 };
-document.getElementById('nextBtn').onclick = () => {
-  if (currentIndex < orders.length - 1) { currentIndex++; renderOrder(); }
-};
+// swipe
+let sx=0;
+mainEl.addEventListener('touchstart',e=>sx=e.touches[0].clientX,{passive:true});
+mainEl.addEventListener('touchend',e=>{
+  const d = e.changedTouches[0].clientX - sx;
+  if (d>50) prevBtn.click();
+  if (d< -50) nextBtn.click();
+},{passive:true});
+// keyboard
+document.addEventListener('keydown',e=>{
+  if (e.key==='ArrowLeft') prevBtn.click();
+  if (e.key==='ArrowRight') nextBtn.click();
+  if (e.key.toLowerCase()==='d') darkTog.click();
+  if (e.key.toLowerCase()==='j') jumpIn.focus();
+});
+// dark mode
+darkTog.onclick = ()=>document.body.classList.toggle('dark');
 
-// Swipe support
-let startX = null;
-container.addEventListener('touchstart', e=> {
-  startX = e.touches[0].clientX;
-}, {passive:true});
-container.addEventListener('touchend', e=> {
-  if (startX===null) return;
-  const diff = e.changedTouches[0].clientX - startX;
-  if (diff > 50 && currentIndex>0)        currentIndex--, renderOrder();
-  else if (diff < -50 && currentIndex<orders.length-1) currentIndex++, renderOrder();
-  startX = null;
-}, {passive:true});
-
-// Kickoff
+// init
 loadData();
