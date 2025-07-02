@@ -8,25 +8,31 @@
 </head>
 <body>
   <div class="container">
-    <img src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/logo-truck-transparent.png?v=1712597330" alt="Designated Drinks Logo" class="logo" />
+    <img 
+      src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/logo-truck-transparent.png?v=1712597330" 
+      alt="Designated Drinks Logo" 
+      class="logo" 
+    />
 
     <header>
       <h2 id="orderId">Order #</h2>
-      <p><strong>Customer Name:</strong> <span id="customerName">...</span></p>
+      <p><strong>Customer Name:</strong> <span id="customerName">Loading...</span></p>
     </header>
 
-    <div class="summary">
-      <div id="boxCalculation"><strong>Boxes Required:</strong> <span id="boxCount">Calculating...</span></div>
-      <div id="pickProgress"></div>
-    </div>
+    <section class="summary">
+      <p><strong>Boxes Required:</strong> <span id="boxCount">Calculating...</span></p>
+      <p><strong>Total Cans:</strong> <span id="totalCans">0</span></p>
+      <p><strong>Notes:</strong> <span id="noteText">None</span></p>
+    </section>
 
-    <h3>Order Summary</h3>
-    <div id="packSummary"></div>
-    <p><strong>Total Cans:</strong> <span id="totalCans">0</span></p>
+    <section>
+      <h3>Order Summary</h3>
+      <div id="packSummary"></div>
+    </section>
 
-    <p><strong>Notes:</strong> <span id="noteText">None</span></p>
-
-    <div id="itemsContainer"></div>
+    <section id="itemsContainer">
+      <!-- Items will render here -->
+    </section>
 
     <p><strong>Picked by:</strong> ____________________________</p>
 
