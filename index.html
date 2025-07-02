@@ -10,10 +10,15 @@
   <div class="container">
     <img src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/logo-truck-transparent.png?v=1712597330" alt="Designated Drinks Logo" class="logo" />
 
-    <h2 id="orderId">Order #</h2>
-    <p><strong>Customer Name:</strong> <span id="customerName">...</span></p>
+    <header>
+      <h2 id="orderId">Order #</h2>
+      <p><strong>Customer Name:</strong> <span id="customerName">...</span></p>
+    </header>
 
-    <div id="boxCalculation"><strong>Boxes Required:</strong> Calculating...</div>
+    <div class="summary">
+      <div id="boxCalculation"><strong>Boxes Required:</strong> <span id="boxCount">Calculating...</span></div>
+      <div id="pickProgress"></div>
+    </div>
 
     <h3>Order Summary</h3>
     <div id="packSummary"></div>
@@ -28,7 +33,6 @@
     <nav>
       <button id="prevBtn">← Prev</button>
       <button id="nextBtn">Next →</button>
-      <button id="printBtn">🖨 Print</button>
     </nav>
   </div>
 
