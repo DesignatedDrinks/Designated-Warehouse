@@ -1,120 +1,87 @@
-const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-const sheetName = 'Orders';
-const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
-const url       = `https://sheets.googleapis.com/v4/spreadsheets/
-  ${sheetId}/values/${sheetName}?key=${apiKey}`.replace(/\s+/g,'');
+let orders = [];
+let currentIndex = 0;
 
-let orders = [], idx = 0;
+async function loadSheetData() {
+  const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+  const sheetName = 'Orders';
+  const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
+  const url       = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}` +
+                    `/values/${sheetName}?alt=json&key=${apiKey}`;
 
-async function loadOrders() {
   try {
-    const res  = await fetch(url);
-    const js   = await res.json();
-    const rows = js.values || [];
-    if (rows.length < 2) throw new Error('No data');
+    const res = await fetch(url);
+    const json = await res.json();
+    const rows = json.values || [];
 
-    const [hdr, ...data] = rows;
-    const mapCol = col => hdr.indexOf(col);
+    if (rows.length < 2) {
+      document.getElementById('orderItems').innerHTML = '<p>No orders found.</p>';
+      return;
+    }
 
-    data.forEach(r => {
-      const orderId        = r[mapCol('orderId')];
-      const customerName   = r[mapCol('customerName')];
-      const address        = r[mapCol('address')];
-      const title          = r[mapCol('itemTitle')];
-      const variant        = r[mapCol('variantTitle')];
-      const qty            = parseInt(r[mapCol('qty')],10) || 0;
-      const imageUrl       = r[mapCol('imageUrl')] || '';
+    // Drop header row, then group by orderId
+    const body = rows.slice(1);
+    const grouped = {};
 
-      let o = orders.find(o=>o.orderId===orderId);
-      if (!o) {
-        o = { orderId, customerName, address, items: [], totalCans: 0 };
-        orders.push(o);
+    body.forEach(row => {
+      const orderId      = row[0] || '';
+      const customerName = row[1] || '';
+      const itemTitle    = row[3] || '';
+      const qty          = parseInt(row[5], 10) || 0;
+      const notes        = row[7] || '';
+      const imageUrl     = row[8] || '';
+
+      if (!grouped[orderId]) {
+        grouped[orderId] = { orderId, customerName, notes, items: [] };
       }
-      // convert variant "4 Pack" → size 4
-      const sizeMatch = variant.match(/(\d+)\s*Pack/i);
-      const size = sizeMatch ? +sizeMatch[1] : 1;
-      o.items.push({ title, qty, size, imageUrl });
-      o.totalCans += qty * size;
+      grouped[orderId].items.push({ title: itemTitle, qty, imageUrl });
     });
 
-    render();
-  } catch(err) {
-    document.getElementById('itemsList').innerHTML =
-      `<p style="color:tomato; text-align:center;">Error loading orders</p>`;
-    console.error(err);
+    orders = Object.values(grouped);
+    renderOrder();
+
+  } catch (e) {
+    document.getElementById('orderItems').innerHTML =
+      '<p style="color:tomato;">Error loading orders</p>';
+    console.error(e);
   }
 }
 
-function calculateBoxes(total) {
-  const sizes = [24,12,6];
-  const result = [];
-  let rem = total;
-  sizes.forEach(s => {
-    const c = Math.floor(rem/s);
-    if(c) {
-      result.push(`${c} × ${s}-pack box`);
-      rem -= c*s;
-    }
-  });
-  return result;
-}
+function renderOrder() {
+  const order = orders[currentIndex];
+  if (!order) return;
 
-function render() {
-  if (orders.length===0) return;
-  idx = Math.min(Math.max(idx,0),orders.length-1);
-  const o = orders[idx];
+  document.getElementById('orderId').innerText      = `Order #${order.orderId}`;
+  document.getElementById('customerName').innerText = order.customerName;
+  document.getElementById('orderNotes').innerText   = order.notes || '';
 
-  // header
-  document.getElementById('orderNumber').innerText = o.orderId;
-  document.getElementById('customerAddress').innerText = o.address;
-
-  // summary
-  const bs = calculateBoxes(o.totalCans);
-  document.getElementById('boxSummary').innerHTML =
-    `<strong>Boxes Required:</strong><br>${bs.join('<br>')}<br>
-     <strong>Total Boxes:</strong> ${bs.length}`;
-  document.getElementById('totalCans').innerText = o.totalCans;
-
-  // items
-  const container = document.getElementById('itemsList');
-  container.innerHTML = o.items.map(item=>`
-    <div class="item-card">
-      <img src="${item.imageUrl}" alt="${item.title}"/>
-      <div class="item-info">
-        <div class="title">${item.title}</div>
-        <div class="qty">${item.qty * item.size} cans</div>
+  const html = order.items.map(item => {
+    const src = item.imageUrl || 'https://via.placeholder.com/50?text=?';
+    return `
+      <div class="item">
+        <img src="${src}" alt="${item.title}" />
+        <div class="item-details">
+          <strong>${item.title}</strong><br>
+          ${item.qty} cans
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+
+  document.getElementById('orderItems').innerHTML = html;
 }
 
-function next() {
-  idx = Math.min(idx+1, orders.length-1);
-  render();
-}
-function prev() {
-  idx = Math.max(idx-1, 0);
-  render();
-}
-
-// mark complete & next
-function completeAndNext() {
-  orders.splice(idx,1);
-  if (idx >= orders.length) idx = orders.length-1;
-  render();
-}
-
-// swipe gestures
-let startX=0;
-document.addEventListener('touchstart', e=> startX=e.touches[0].screenX );
-document.addEventListener('touchend', e=>{
-  const dx = e.changedTouches[0].screenX - startX;
-  if (dx < -50) next();
-  if (dx > 50) prev();
+document.getElementById('prevBtn').addEventListener('click', () => {
+  if (currentIndex > 0) {
+    currentIndex--;
+    renderOrder();
+  }
+});
+document.getElementById('nextBtn').addEventListener('click', () => {
+  if (currentIndex < orders.length - 1) {
+    currentIndex++;
+    renderOrder();
+  }
 });
 
-document.getElementById('nextBtn').addEventListener('click', next);
-document.getElementById('prevBtn').addEventListener('click', prev);
-document.getElementById('completeBtn').addEventListener('click', completeAndNext);
-
-window.addEventListener('load', loadOrders);
+// load on startup
+window.addEventListener('load', loadSheetData);
