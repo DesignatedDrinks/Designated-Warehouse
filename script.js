@@ -16,14 +16,31 @@ async function loadSheetData() {
       return;
     }
 
-    const body = rows.slice(1);
-    const grouped = {};
+    const [headers, ...entries] = rows;
 
-    body.forEach(row => {
-      const [orderId, customerName, itemTitle, variantTitle, itemFullTitle, qty, picked, notes, imageUrl] = row;
+    const grouped = {};
+    entries.forEach(row => {
+      const [
+        orderId,
+        customerName,
+        itemTitle,
+        variantTitle,
+        itemFullTitle,
+        qty,
+        picked,
+        notes,
+        imageUrl
+      ] = row;
+
       if (!grouped[orderId]) {
-        grouped[orderId] = { orderId, customerName, notes, items: [] };
+        grouped[orderId] = {
+          orderId,
+          customerName,
+          notes,
+          items: []
+        };
       }
+
       grouped[orderId].items.push({
         title: itemFullTitle,
         qty: parseInt(qty),
@@ -34,8 +51,8 @@ async function loadSheetData() {
     orders = Object.values(grouped);
     renderOrder();
   } catch (error) {
-    console.error('Error loading sheet:', error);
     document.getElementById('itemsContainer').innerHTML = '<p>Error loading orders.</p>';
+    console.error('Fetch error:', error);
   }
 }
 
@@ -49,38 +66,36 @@ function renderOrder() {
 
   const itemsHtml = order.items.map(item => `
     <div class="item">
-      <img src="${item.imageUrl}" alt="">
+      <img src="${item.imageUrl}" alt="${item.title}" />
       <label>${item.qty} × ${item.title}</label>
-      <input type="checkbox">
+      <input type="checkbox" />
     </div>
   `).join('');
+
   document.getElementById('itemsContainer').innerHTML = itemsHtml;
 
   const totalCans = order.items.reduce((sum, item) => sum + item.qty, 0);
   document.getElementById('totalCans').innerText = totalCans;
-  document.getElementById('boxCalculation').innerHTML = `<strong>Boxes Required:</strong> ${Math.ceil(totalCans / 24)}`;
 
-  document.getElementById('packSummary').innerHTML = order.items
-    .map(item => `<div>${item.qty} × ${item.title}</div>`)
-    .join('');
+  const boxCount = Math.ceil(totalCans / 24);
+  document.getElementById('boxCount').innerText = boxCount;
+
+  const packSummary = order.items.map(item => `${item.qty} × ${item.title}`).join('<br>');
+  document.getElementById('packSummary').innerHTML = packSummary;
 }
 
-function prevOrder() {
+document.getElementById('prevBtn').addEventListener('click', () => {
   if (currentIndex > 0) {
     currentIndex--;
     renderOrder();
   }
-}
+});
 
-function nextOrder() {
+document.getElementById('nextBtn').addEventListener('click', () => {
   if (currentIndex < orders.length - 1) {
     currentIndex++;
     renderOrder();
   }
-}
-
-document.getElementById('prevBtn').addEventListener('click', prevOrder);
-document.getElementById('nextBtn').addEventListener('click', nextOrder);
-document.getElementById('printBtn').addEventListener('click', () => window.print());
+});
 
 loadSheetData();
