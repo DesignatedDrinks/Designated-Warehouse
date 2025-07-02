@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
+  <div class="container" id="swipeZone">
     <header class="header">
       <button id="prevBtn" class="nav-button" aria-label="Previous Order">&larr;</button>
       <h1 id="orderId">Loading…</h1>
@@ -19,15 +19,11 @@
       <p id="customerAddress"></p>
     </div>
 
-    <div id="boxSummary" class="box-summary">
-      <!-- Boxes Required will go here -->
-    </div>
+    <div id="boxSummary" class="box-summary"> </div>
 
-    <div id="itemsContainer" class="items">
-      <!-- Item cards will render here -->
-    </div>
+    <div id="itemsContainer" class="items"></div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="script.js" defer></script>
 </body>
 </html>
