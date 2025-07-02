@@ -1,4 +1,4 @@
-let orders = [];
+let orders = []; 
 let currentIndex = 0;
 const packSizes = [28,24,12,10,8,6,5,4,1];
 
