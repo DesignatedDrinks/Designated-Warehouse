@@ -2,35 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="order-container" id="orderContainer">
-    <div class="order-header">
-      <div>
-        <h2 id="orderId">Order #…</h2>
-        <div id="customerName" class="customer-name">Customer Name</div>
-        <div id="customerAddress" class="customer-address">Shipping Address</div>
-      </div>
+  <header class="sticky-header">
+    <div class="header-left">
+      <button id="prevBtn" aria-label="Previous order">←</button>
+      <button id="nextBtn" aria-label="Next order">→</button>
     </div>
-
-    <div id="orderNotes" class="note-box"></div>
-
-    <div class="summary-box">
-      <div><strong>Boxes Required:</strong></div>
-      <div id="boxBreakdown">Calculating…</div>
-      <div><strong>Total Cans:</strong> <span id="totalCans">0</span></div>
+    <div class="header-center">
+      <h1 id="orderId">Order #…</h1>
+      <div id="customerName" class="customer-info">Customer Name</div>
+      <div id="customerAddress" class="customer-info small">123 Main St, Calgary, AB</div>
     </div>
-
-    <div id="itemsContainer" class="order-items"></div>
-
-    <div class="nav-buttons">
-      <button id="prevBtn">⬅ Prev</button>
-      <button id="nextBtn">Next ➡</button>
+    <div class="header-right">
+      <input id="jumpInput" type="number" placeholder="Jump to #" min="1" />
+      <button id="jumpBtn">Go</button>
+      <button id="darkToggle" aria-label="Toggle dark mode">🌓</button>
     </div>
-  </div>
+  </header>
+
+  <div id="boxInline" class="boxes-inline">Calculating boxes…</div>
+
+  <main id="itemsContainer" class="items-list">
+    <!-- skeleton cards while loading -->
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+    <div class="skeleton-card"></div>
+  </main>
 
   <script src="script.js"></script>
 </body>
