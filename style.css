@@ -94,3 +94,18 @@ section h2 {
 .nav button:hover {
   background: #005ea2;
 }
+/* “Pick Pack” button */
+.pick-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: #0078d4;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+.pick-link:hover {
+  background: #005ea2;
+}
+
