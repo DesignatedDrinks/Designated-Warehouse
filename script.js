@@ -22,7 +22,7 @@ async function loadOrders() {
     const grouped = {};
 
     body.forEach(r => {
-      let [orderId, customerName, address, itemTitle, variantTitle, qtyStr, notes, imageUrl] = r;
+      let [orderId, customerName, address, itemTitle, variantTitle, qtyStr, picked, notes, imageUrl] = r;
       const qty = parseInt(qtyStr,10) || 0;
 
       // packSize: pull number from "12 Pack" etc
