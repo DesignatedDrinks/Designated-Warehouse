@@ -1,4 +1,4 @@
-let orders = [], currentIndex = 0, imageLookup = [];
+let orders = [], currentIndex = 0, imageLookup = []; 
 
 // ➤ CONFIG
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
