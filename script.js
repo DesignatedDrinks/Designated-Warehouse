@@ -1,131 +1,135 @@
-// ─── CONFIG ─────────────────────────────────────────────────────────
-const sheetId      = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-const apiKey       = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
-const ordersRange  = 'Orders!A2:H';        // [orderId,customerName,address,itemTitle,variantTitle,qty,notes,imageUrl]
-const lookupRange  = 'ImageLookup!A2:B';   // [itemTitle,imageUrl]
+// script.js
 
-// ─── STATE ──────────────────────────────────────────────────────────
-let orders = [], currentIndex = 0;
+const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+const sheetName = 'Orders';
+const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 
-// ─── FETCH & INIT ───────────────────────────────────────────────────
-async function loadData() {
+const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
+
+let orders = [];
+let currentIndex = 0;
+
+// 1) Fetch & group
+async function loadOrders() {
   try {
-    const [oRes, lRes] = await Promise.all([
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersRange)}?key=${apiKey}`),
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(lookupRange)}?key=${apiKey}`)
-    ]);
-    const oJson = await oRes.json();
-    const lJson = await lRes.json();
+    const res  = await fetch(url);
+    const json = await res.json();
+    const rows = json.values || [];
+    if (rows.length < 2) throw new Error('No data');
 
-    const oRows = oJson.values || [];
-    const lRows = lJson.values || [];
+    // header = rows[0]
+    const body = rows.slice(1);
+    const grouped = {};
 
-    // Build a quick lookup map for images
-    const imgMap = {};
-    lRows.forEach(r => {
-      const [title, url] = r;
-      imgMap[title.toLowerCase().trim()] = url;
-    });
-
-    // Group orders
-    const map = {};
-    oRows.forEach(r => {
-      const [orderId, customerName, address,
-             itemTitle, variantTitle, qtyStr,
-             notes] = r;
+    body.forEach(r => {
+      let [orderId, customerName, address, itemTitle, variantTitle, qtyStr, notes, imageUrl] = r;
       const qty = parseInt(qtyStr,10) || 0;
-      const packSizeMatch = variantTitle.match(/(\d+)/);
-      const packSize = packSizeMatch ? +packSizeMatch[1] : 1;
-      const totalUnits = qty * packSize;
-      const key = orderId;
-      if (!map[key]) {
-        map[key] = { orderId, customerName, address, notes, items: [], totalCans:0 };
+
+      // packSize: pull number from "12 Pack" etc
+      let packSize = 1;
+      const m = variantTitle.match(/(\d+)\s*pack/i);
+      if (m) packSize = +m[1];
+
+      const cans = qty * packSize;
+
+      if (!grouped[orderId]) {
+        grouped[orderId] = {
+          orderId, customerName, address, notes: notes||'', items: [], totalCans: 0
+        };
       }
-      map[key].items.push({
-        title: itemTitle,
-        units: totalUnits,
-        imageUrl: imgMap[itemTitle.toLowerCase().trim()] || ''
-      });
-      map[key].totalCans += totalUnits;
+      grouped[orderId].items.push({itemTitle, cans, imageUrl});
+      grouped[orderId].totalCans += cans;
     });
 
-    orders = Object.values(map);
+    orders = Object.values(grouped);
+    updateDashboard();
     renderOrder();
-  } catch(err) {
-    console.error(err);
-    document.getElementById('itemsContainer').innerHTML = '<p style="color:#f55;">Error loading orders.</p>';
+
+  } catch (e) {
+    document.getElementById('order-container').innerHTML =
+      `<p style="text-align:center;opacity:.6">Failed to load orders.</p>`;
   }
 }
 
-// ─── BOX CALC ────────────────────────────────────────────────────────
-function calculateBoxes(total) {
-  const sizes = [24,12,6];
-  const out = {};
-  let rem = total;
-  sizes.forEach(sz => {
-    const cnt = Math.floor(rem/sz);
-    if (cnt>0) {
-      out[sz]=cnt;
-      rem -= cnt*sz;
-    }
+// 2) Dashboard
+function calculateBoxes(n) {
+  let rem = n;
+  const counts = {24:0,12:0,6:0};
+  counts[24] = Math.floor(rem/24); rem %= 24;
+  counts[12] = Math.floor(rem/12); rem %= 12;
+  counts[6]  = Math.floor(rem/6);  rem %= 6;
+  if (rem>0) counts[6]++;
+  return counts;
+}
+
+function updateDashboard(){
+  const pending = orders.length;
+  let totalCans = 0, totalBoxes = 0;
+  orders.forEach(o => {
+    totalCans += o.totalCans;
+    const b = calculateBoxes(o.totalCans);
+    totalBoxes += b[24]+b[12]+b[6];
   });
-  if (rem>0) {
-    out[6] = (out[6]||0)+1;
-  }
-  return out;
+  document.getElementById('dash-pending').textContent = pending;
+  document.getElementById('dash-cans').textContent    = totalCans;
+  document.getElementById('dash-boxes').textContent  = totalBoxes;
 }
 
-// ─── RENDER ─────────────────────────────────────────────────────────
-function renderOrder() {
-  if (!orders.length) {
-    document.getElementById('orderId').innerText = 'Loading…';
-    return;
-  }
-  // clamp index
-  currentIndex = Math.max(0, Math.min(orders.length-1, currentIndex));
+// 3) Render a single order
+function renderOrder(){
   const o = orders[currentIndex];
+  if (!o) return;
 
-  // header
-  document.getElementById('orderId').innerText       = `Order ${o.orderId}`;
-  document.getElementById('customerName').innerText  = o.customerName;
-  document.getElementById('customerAddress').innerText = o.address;
+  document.getElementById('orderId').textContent        = `Order #${o.orderId}`;
+  document.getElementById('customerName').textContent   = o.customerName;
+  document.getElementById('customerAddress').textContent= o.address;
 
-  // box summary
-  const bc = calculateBoxes(o.totalCans);
-  const lines = Object.entries(bc)
-    .map(([sz,c]) => `${c} × ${sz}-pack`)
-    .join('\n');
-  const totalBoxes = Object.values(bc).reduce((a,b)=>a+b,0);
-  document.getElementById('boxSummary').innerText = 
-    `Boxes Required:\n${lines}\nTotal Boxes: ${totalBoxes}\nTotal Cans: ${o.totalCans}`;
+  // boxes summary
+  const b = calculateBoxes(o.totalCans);
+  const lines = [];
+  if(b[24]) lines.push(`${b[24]} × 24-pack`);
+  if(b[12]) lines.push(`${b[12]} × 12-pack`);
+  if(b[6 ]) lines.push(`${b[6] } × 6-pack`);
+  const totalBoxes = b[24]+b[12]+b[6];
+  document.getElementById('boxesInfo').innerHTML =
+    `<strong>Boxes Required:</strong> ${lines.join(', ')}<br>
+     <strong>Total Boxes:</strong> ${totalBoxes}<br>
+     <strong>Total Cans:</strong> ${o.totalCans}`;
 
   // items
-  const html = o.items.map(i=>`
-    <div class="item-card">
-      <img src="${i.imageUrl}" alt="${i.title}">
-      <div class="item-details">
-        <p>${i.title}</p>
-        <p>${i.units} cans</p>
+  const html = o.items.map(it=>`
+    <div class="item">
+      <img src="${it.imageUrl||''}"
+           onerror="this.src='https://via.placeholder.com/50'"
+           alt="${it.itemTitle}" />
+      <div class="details">
+        <p><strong>${it.itemTitle}</strong></p>
+        <p>${it.cans} cans</p>
       </div>
     </div>
   `).join('');
   document.getElementById('itemsContainer').innerHTML = html;
+
+  // nav buttons
+  document.getElementById('prevBtn').disabled = currentIndex===0;
+  document.getElementById('nextBtn').disabled = currentIndex===orders.length-1;
 }
 
-// ─── NAVIGATION ────────────────────────────────────────────────────
-document.getElementById('prevBtn').addEventListener('click', ()=>{ currentIndex--; renderOrder(); });
-document.getElementById('nextBtn').addEventListener('click', ()=>{ currentIndex++; renderOrder(); });
-
-// ─── SWIPE SUPPORT ─────────────────────────────────────────────────
+// 4) Prev / Next & swipe
+document.getElementById('prevBtn').onclick = ()=> {
+  if (currentIndex>0) { currentIndex--; renderOrder(); }
+};
+document.getElementById('nextBtn').onclick = ()=> {
+  if (currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
+};
 let startX=0;
-const zone = document.getElementById('swipeZone');
-zone.addEventListener('touchstart', e=>{ startX=e.changedTouches[0].screenX; });
-zone.addEventListener('touchend',   e=>{
+const oc = document.getElementById('order-container');
+oc.addEventListener('touchstart', e=> startX=e.changedTouches[0].screenX);
+oc.addEventListener('touchend',   e=>{
   const dx = e.changedTouches[0].screenX - startX;
-  if (dx>50)           { currentIndex--; renderOrder(); }
-  else if (dx<-50)     { currentIndex++; renderOrder(); }
+  if (dx>50 && currentIndex>0)        { currentIndex--; renderOrder(); }
+  else if (dx<-50 && currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
 });
 
-// ─── AUTO REFRESH ──────────────────────────────────────────────────
-loadData();
-setInterval(loadData, 5*60*1000);
+// kick it off
+loadOrders();
