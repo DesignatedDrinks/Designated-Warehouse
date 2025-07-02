@@ -6,11 +6,20 @@
   --btn: #3700b3;
   --btn-text: #ffffff;
 }
+
+/* Reset */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
+
+/* Utility */
+.hidden {
+  display: none;
+}
+
+/* Base */
 body {
   background: var(--bg);
   color: var(--text);
@@ -19,14 +28,19 @@ body {
   flex-direction: column;
   min-height: 100vh;
 }
+
+/* Header */
 header {
   padding: 1rem;
   text-align: center;
+  background: var(--card);
 }
-h1 {
+header h1 {
   font-size: 1.5rem;
   color: var(--accent);
 }
+
+/* Dashboard */
 #dashboard {
   display: flex;
   justify-content: space-around;
@@ -42,20 +56,23 @@ h1 {
 }
 .dash-label {
   font-size: 0.9rem;
+  opacity: 0.8;
 }
+
+/* Main container */
 main {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 1rem;
 }
-.order-container {
+
+/* Orders View */
+#ordersView .order-container {
   background: var(--card);
   border-radius: 8px;
   padding: 1rem;
   width: 100%;
   max-width: 600px;
+  margin: 0 auto;
 }
 .order-header {
   display: flex;
@@ -116,4 +133,73 @@ main {
 }
 .items-list .details p {
   margin-bottom: 0.25rem;
+}
+
+/* Packs View */
+#packsView {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+#togglePacksBtn,
+#backToOrdersBtn {
+  display: inline-block;
+  background: var(--btn);
+  color: var(--btn-text);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 1rem;
+}
+#packsView .filter-container {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+#packsView label {
+  font-size: 1rem;
+  margin-right: 10px;
+  color: var(--text);
+}
+#packsView select {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 1px solid #555;
+  background: var(--card);
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+}
+#results {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.pack-item {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease-in-out;
+}
+.pack-item:hover {
+  transform: translateY(-2px);
+}
+.pack-item h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--accent);
+}
+.pack-item img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  border-radius: 4px;
+  margin-right: 1rem;
+  background: #333;
 }
