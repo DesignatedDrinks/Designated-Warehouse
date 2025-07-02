@@ -9,16 +9,23 @@
 <body>
   <div class="order-container" id="orderContainer">
     <div class="order-header">
-      <h2 id="orderId">Order #...</h2>
-      <span id="customerName">Customer Name</span>
+      <div>
+        <h2 id="orderId">Order #…</h2>
+        <div id="customerName" class="customer-name">Customer Name</div>
+        <div id="customerAddress" class="customer-address">Shipping Address</div>
+      </div>
     </div>
+
     <div id="orderNotes" class="note-box"></div>
+
     <div class="summary-box">
       <div><strong>Boxes Required:</strong></div>
       <div id="boxBreakdown">Calculating…</div>
       <div><strong>Total Cans:</strong> <span id="totalCans">0</span></div>
     </div>
+
     <div id="itemsContainer" class="order-items"></div>
+
     <div class="nav-buttons">
       <button id="prevBtn">⬅ Prev</button>
       <button id="nextBtn">Next ➡</button>
