@@ -1,33 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <img src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/logo-truck-transparent.png?v=1712597330" alt="Designated Drinks Logo" class="logo" />
+    <header class="top-bar">
+      <img src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/logo-truck-transparent.png?v=1712597330"
+           alt="Designated Drinks Logo" class="logo">
+      <div class="info">
+        <h1 id="orderId">Order #…</h1>
+        <p><strong>Customer:</strong> <span id="customerName">…</span></p>
+        <p><strong>Order:</strong> <span id="orderIndex">0 / 0</span></p>
+      </div>
+    </header>
 
-    <h2 id="orderId">Order #</h2>
-    <p><strong>Customer Name:</strong> <span id="customerName">...</span></p>
+    <section class="box-summary">
+      <h2>Boxes Required</h2>
+      <div id="boxBreakdown">–</div>
+    </section>
 
-    <div id="boxCalculation" class="box-info">Calculating...</div>
+    <section class="order-summary">
+      <h2>Order Summary</h2>
+      <p><strong>Total Cans:</strong> <span id="totalCans">0</span></p>
+    </section>
 
-    <h3>Order Summary</h3>
-    <div id="packSummary"></div>
-    <p><strong>Total Cans:</strong> <span id="totalCans">0</span></p>
-    <p><strong>Notes:</strong> <span id="noteText">None</span></p>
+    <section id="itemsContainer" class="items">
+      <!-- Items will be injected here -->
+    </section>
 
-    <div id="itemsContainer"></div>
-
-    <p><strong>Picked by:</strong> ____________________________</p>
-
-    <nav>
+    <footer class="nav">
       <button id="prevBtn">← Prev</button>
       <button id="nextBtn">Next →</button>
-    </nav>
+    </footer>
   </div>
 
   <script src="script.js"></script>
