@@ -1,9 +1,9 @@
 // ─── CONFIG ───
-const SHEET_ID   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-const API_KEY    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
-const ORDERS_TAB = 'Orders';
-const PICK_URL   = 'https://designateddrinks.github.io/Designated-Direct/';
-const PACK_SIZES = [28,24,12,10,8,6,5,4,1];
+const SHEET_ID    = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+const API_KEY     = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
+const ORDERS_TAB  = 'Orders';
+const DIRECT_BASE = 'https://designateddrinks.github.io/Designated-Direct';
+const PACK_SIZES  = [28,24,12,10,8,6,5,4,1];
 
 let orders = [], currentIndex = 0;
 
@@ -15,16 +15,23 @@ async function loadData() {
     const rows = json.values || [];
     if (rows.length < 2) throw new Error('No orders found');
 
+    // group by orderId
     const grouped = {};
     rows.slice(1).forEach(r => {
-      const [orderId,cust,itemTitle,variantTitle,qtyStr,picked,notes,imageUrl] = r;
+      const [orderId, customerName, itemTitle, variantTitle, qtyStr, , notes, imageUrl] = r;
       const qty = parseInt(qtyStr,10) || 0;
       const m = (variantTitle||'').match(/(\d+)\s*Pack/i);
       const packSize = m ? parseInt(m[1],10) : 1;
       const cans = qty * packSize;
 
       if (!grouped[orderId]) {
-        grouped[orderId] = { orderId, customerName: cust, notes, totalCans:0, items: [] };
+        grouped[orderId] = {
+          orderId,
+          customerName,
+          notes,
+          totalCans: 0,
+          items: []
+        };
       }
       grouped[orderId].items.push({ itemTitle, variantTitle, qty, packSize, imageUrl });
       grouped[orderId].totalCans += cans;
@@ -36,7 +43,7 @@ async function loadData() {
   } catch (err) {
     console.error('Error loading orders:', err);
     document.getElementById('itemsContainer').innerHTML =
-      `<p style="color:red;padding:1rem;">${err.message}</p>`;
+      `<p style="color:red; padding:1rem;">${err.message}</p>`;
   }
 }
 
@@ -56,7 +63,7 @@ function renderOrder() {
   if (!orders.length) return;
   const o = orders[currentIndex];
 
-  // Header & summary
+  // Header
   document.getElementById('orderId').innerText      = `Order #${o.orderId}`;
   document.getElementById('customerName').innerText = o.customerName;
   document.getElementById('orderIndex').innerText   = `${currentIndex+1} / ${orders.length}`;
@@ -73,11 +80,12 @@ function renderOrder() {
   document.getElementById('boxBreakdown').innerHTML =
     boxHtml + `<strong>Total Boxes:</strong> ${totalBoxes}`;
 
-  // Items + Pick Pack link on any “Designated” title
+  // Items + Pick Pack link
   const itemsHtml = o.items.map(item => {
-    const isDesignated = /designated/i.test(item.itemTitle);
+    const isDesignated = /designated drinks/i.test(item.itemTitle);
+    const packParam    = encodeURIComponent(item.itemTitle);
     const pickLink     = isDesignated
-      ? `<a class="pick-link" href="${PICK_URL}" target="_blank">Pick Pack</a>`
+      ? `<a class="pick-link" href="${DIRECT_BASE}?pack=${packParam}" target="_blank">Pick Pack</a>`
       : '';
 
     return `
@@ -96,12 +104,12 @@ function renderOrder() {
   document.getElementById('itemsContainer').innerHTML = itemsHtml;
 }
 
-// Navigation
+// Prev/Next
 document.getElementById('prevBtn').onclick = () => {
-  if (currentIndex>0) { currentIndex--; renderOrder(); }
+  if (currentIndex > 0) { currentIndex--; renderOrder(); }
 };
 document.getElementById('nextBtn').onclick = () => {
-  if (currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
+  if (currentIndex < orders.length - 1) { currentIndex++; renderOrder(); }
 };
 
 // Initialize
