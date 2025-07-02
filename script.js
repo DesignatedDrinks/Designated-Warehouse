@@ -20,27 +20,10 @@ async function loadSheetData() {
     const grouped = {};
 
     body.forEach(row => {
-      const [
-        orderId,
-        customerName,
-        itemTitle,
-        variantTitle,
-        itemFullTitle,
-        qty,
-        picked,
-        notes,
-        imageUrl
-      ] = row;
-
+      const [orderId, customerName, itemTitle, variantTitle, itemFullTitle, qty, picked, notes, imageUrl] = row;
       if (!grouped[orderId]) {
-        grouped[orderId] = {
-          orderId,
-          customerName,
-          notes,
-          items: []
-        };
+        grouped[orderId] = { orderId, customerName, notes, items: [] };
       }
-
       grouped[orderId].items.push({
         title: itemFullTitle,
         qty: parseInt(qty),
@@ -51,8 +34,8 @@ async function loadSheetData() {
     orders = Object.values(grouped);
     renderOrder();
   } catch (error) {
+    console.error('Error loading sheet:', error);
     document.getElementById('itemsContainer').innerHTML = '<p>Error loading orders.</p>';
-    console.error('Fetch error:', error);
   }
 }
 
@@ -62,34 +45,42 @@ function renderOrder() {
 
   document.getElementById('orderId').innerText = `Order ${order.orderId}`;
   document.getElementById('customerName').innerText = order.customerName;
-  document.getElementById('noteText').innerText = order.notes || '';
+  document.getElementById('noteText').innerText = order.notes || 'None';
 
-  const itemHTML = order.items.map(item => `
+  const itemsHtml = order.items.map(item => `
     <div class="item">
-      <img src="${item.imageUrl}" alt="item" />
+      <img src="${item.imageUrl}" alt="">
       <label>${item.qty} × ${item.title}</label>
-      <input type="checkbox" />
+      <input type="checkbox">
     </div>
   `).join('');
-  document.getElementById('itemsContainer').innerHTML = itemHTML;
+  document.getElementById('itemsContainer').innerHTML = itemsHtml;
 
   const totalCans = order.items.reduce((sum, item) => sum + item.qty, 0);
   document.getElementById('totalCans').innerText = totalCans;
   document.getElementById('boxCalculation').innerHTML = `<strong>Boxes Required:</strong> ${Math.ceil(totalCans / 24)}`;
+
+  document.getElementById('packSummary').innerHTML = order.items
+    .map(item => `<div>${item.qty} × ${item.title}</div>`)
+    .join('');
 }
 
-document.getElementById('prevBtn').addEventListener('click', () => {
+function prevOrder() {
   if (currentIndex > 0) {
     currentIndex--;
     renderOrder();
   }
-});
+}
 
-document.getElementById('nextBtn').addEventListener('click', () => {
+function nextOrder() {
   if (currentIndex < orders.length - 1) {
     currentIndex++;
     renderOrder();
   }
-});
+}
+
+document.getElementById('prevBtn').addEventListener('click', prevOrder);
+document.getElementById('nextBtn').addEventListener('click', nextOrder);
+document.getElementById('printBtn').addEventListener('click', () => window.print());
 
 loadSheetData();
