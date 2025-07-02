@@ -18,7 +18,7 @@ const VARIETY_PACK_NAMES = new Set([
   "Designated Drinks (Non-Alcoholic) DayDrinkin' Sixer",
   "Designated Drinks (Non-Alcoholic) Savour Summer 12 Pack",
   "Designated Drinks (Non-Alcoholic) Hop Water 24 Pack",
-  "Designated Drinks (Non-Alcoholic) Dozen 12 Pack"
+  "Designated Drinks (Non-Alcoholic) Debut 12 Pack"
 ]);
 
 let orders = [], currentIndex = 0;
