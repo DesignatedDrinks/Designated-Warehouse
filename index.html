@@ -1,41 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <header class="top-bar">
-      <img src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/logo-truck-transparent.png?v=1712597330"
-           alt="Designated Drinks Logo" class="logo">
-      <div class="info">
-        <h1 id="orderId">Order #…</h1>
-        <p><strong>Customer:</strong> <span id="customerName">…</span></p>
-        <p><strong>Order:</strong> <span id="orderIndex">0 / 0</span></p>
-      </div>
-    </header>
-
-    <section class="box-summary">
-      <h2>Boxes Required</h2>
-      <div id="boxBreakdown">–</div>
-    </section>
-
-    <section class="order-summary">
-      <h2>Order Summary</h2>
-      <p><strong>Total Cans:</strong> <span id="totalCans">0</span></p>
-    </section>
-
-    <section id="itemsContainer" class="items">
-      <!-- Items will be injected here -->
-    </section>
-
-    <footer class="nav">
-      <button id="prevBtn">← Prev</button>
-      <button id="nextBtn">Next →</button>
-    </footer>
+  <div class="order-container">
+    <div class="order-header">
+      <h2 id="orderId">Order #...</h2>
+      <span id="customerName">Customer Name</span>
+      <span id="orderIndex" class="order-index">0 / 0</span>
+    </div>
+    <div id="orderNotes" class="note-box"></div>
+    <div class="summary-box">
+      <div><strong>Boxes Required:</strong></div>
+      <div id="boxBreakdown">Calculating…</div>
+      <div><strong>Total Cans:</strong> <span id="totalCans">0</span></div>
+    </div>
+    <div id="itemsContainer" class="order-items"></div>
+    <div class="nav-buttons">
+      <button id="prevBtn">⬅ Prev</button>
+      <button id="nextBtn">Next ➡</button>
+    </div>
   </div>
 
   <script src="script.js"></script>
