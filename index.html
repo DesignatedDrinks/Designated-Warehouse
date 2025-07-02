@@ -2,22 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="orderContainer" class="order-container">
-    <header class="order-header">
-      <h2 id="orderId">Loading…</h2>
-      <span id="customerName" class="customer-name"></span>
+  <div class="container">
+    <header class="header">
+      <button id="prevBtn" class="nav-button" aria-label="Previous Order">&larr;</button>
+      <h1 id="orderId">Loading…</h1>
+      <button id="nextBtn" class="nav-button" aria-label="Next Order">&rarr;</button>
     </header>
-    <div id="shippingAddress" class="shipping-address"></div>
-    <section id="boxSummary" class="box-summary"></section>
-    <section id="itemsContainer" class="items-container"></section>
-    <div class="nav-buttons">
-      <button id="prevBtn" class="nav-btn">← Prev</button>
-      <button id="nextBtn" class="nav-btn">Next →</button>
+
+    <div class="customer-info">
+      <p id="customerName"></p>
+      <p id="customerAddress"></p>
+    </div>
+
+    <div id="boxSummary" class="box-summary">
+      <!-- Boxes Required will go here -->
+    </div>
+
+    <div id="itemsContainer" class="items">
+      <!-- Item cards will render here -->
     </div>
   </div>
 
