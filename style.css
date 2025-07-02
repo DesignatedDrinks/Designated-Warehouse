@@ -1,70 +1,73 @@
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: Arial, sans-serif;
   margin: 0;
-  padding: 1rem;
-  background-color: #f4f4f4;
+  background-color: #f9f9f9;
+  color: #333;
 }
 
 .container {
-  max-width: 900px;
-  margin: 0 auto;
-  background: #fff;
+  max-width: 800px;
+  margin: 2rem auto;
   padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .logo {
-  width: 280px;
   display: block;
-  margin: 0 auto 20px auto;
+  margin: 0 auto 1rem auto;
+  max-width: 300px;
 }
 
-h2, h3 {
-  margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid #ccc;
-  padding-bottom: 0.3rem;
+header {
+  margin-bottom: 1rem;
 }
 
-#itemsContainer .item {
+.summary {
+  margin-bottom: 1rem;
+}
+
+#itemsContainer {
+  margin-top: 2rem;
+}
+
+.item {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #eee;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid #ddd;
 }
 
-#itemsContainer .item img {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
+.item img {
+  width: 50px;
+  height: 50px;
+  margin-right: 1rem;
+  object-fit: cover;
   border-radius: 4px;
 }
 
-#itemsContainer .item label {
-  flex-grow: 1;
-  font-size: 1rem;
+.item label {
+  flex: 1;
+  font-weight: bold;
+}
+
+nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2rem;
 }
 
 button {
-  background: #000;
-  color: #fff;
+  padding: 0.5rem 1rem;
   border: none;
-  padding: 0.6rem 1.2rem;
-  font-size: 1rem;
-  margin-right: 1rem;
+  background: #0078d7;
+  color: white;
   border-radius: 4px;
   cursor: pointer;
 }
 
 button:hover {
-  background: #333;
-}
-
-nav {
-  margin-top: 2rem;
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
+  background: #005fa3;
 }
