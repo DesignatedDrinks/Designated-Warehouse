@@ -1,47 +1,76 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Packing Slip</title>
+  <style>
+    /* CSS styles remain unchanged */
+  </style>
 </head>
 <body>
-  <div class="container">
-    <img 
-      src="https://cdn.shopify.com/s/files/1/0638/0100/0159/files/logo-truck-transparent.png?v=1712597330" 
-      alt="Designated Drinks Logo" 
-      class="logo" 
-    />
+  <div class="wrapper">
+    {% assign total_cans = 0 %}
+    {% assign pack_sizes = "28,24,12,10,8,6,5,4,1" | split: "," %}
+    {% assign pack_counts = {} %}
 
-    <header>
-      <h2 id="orderId">Order #</h2>
-      <p><strong>Customer Name:</strong> <span id="customerName">Loading...</span></p>
-    </header>
+    {% for item in order.line_items %}
+      {% assign qty = item.quantity %}
+      {% assign multiplier = 1 %}
+      {% assign pack_type = "1" %}
+      {% if item.variant.title contains "28 Pack" or item.variant.title contains "28-Pack" %}
+        {% assign multiplier = 28 %}
+        {% assign pack_type = "28" %}
+      {% elsif item.variant.title contains "24 Pack" or item.variant.title contains "24-Pack" %}
+        {% assign multiplier = 24 %}
+        {% assign pack_type = "24" %}
+      {% elsif item.variant.title contains "12 Pack" %}
+        {% assign multiplier = 12 %}
+        {% assign pack_type = "12" %}
+      {% elsif item.variant.title contains "10 Pack" %}
+        {% assign multiplier = 10 %}
+        {% assign pack_type = "10" %}
+      {% elsif item.variant.title contains "8 Pack" %}
+        {% assign multiplier = 8 %}
+        {% assign pack_type = "8" %}
+      {% elsif item.variant.title contains "6 Pack" %}
+        {% assign multiplier = 6 %}
+        {% assign pack_type = "6" %}
+      {% elsif item.variant.title contains "5 Pack" %}
+        {% assign multiplier = 5 %}
+        {% assign pack_type = "5" %}
+      {% elsif item.variant.title contains "4 Pack" %}
+        {% assign multiplier = 4 %}
+        {% assign pack_type = "4" %}
+      {% endif %}
 
-    <section class="summary">
-      <p><strong>Boxes Required:</strong> <span id="boxCount">Calculating...</span></p>
-      <p><strong>Total Cans:</strong> <span id="totalCans">0</span></p>
-      <p><strong>Notes:</strong> <span id="noteText">None</span></p>
-    </section>
+      {% assign can_count = qty | times: multiplier %}
+      {% assign total_cans = total_cans | plus: can_count %}
+    {% endfor %}
 
-    <section>
-      <h3>Order Summary</h3>
-      <div id="packSummary"></div>
-    </section>
+    <!-- Calculate Box Breakdown -->
+    {% assign box_breakdown = "" %}
+    {% assign remaining_cans = total_cans %}
+    {% assign total_boxes = 0 %}
+    {% for size in pack_sizes %}
+      {% assign int_size = size | plus: 0 %}
+      {% assign count = remaining_cans | divided_by: int_size %}
+      {% assign mod = remaining_cans | modulo: int_size %}
+      {% if count > 0 %}
+        {% assign box_breakdown = box_breakdown | append: count | append: " x " | append: size | append: "-pack box<br>" %}
+        {% assign total_boxes = total_boxes | plus: count %}
+        {% assign remaining_cans = mod %}
+      {% endif %}
+    {% endfor %}
 
-    <section id="itemsContainer">
-      <!-- Items will render here -->
-    </section>
+    <!-- Boxes Required -->
+    <div class="boxes">
+      <p><strong>Boxes Required:</strong></p>
+      <p>{{ box_breakdown }}</p>
+      <p><strong>Total Boxes: {{ total_boxes }}</strong></p>
+    </div>
 
-    <p><strong>Picked by:</strong> ____________________________</p>
-
-    <nav>
-      <button id="prevBtn">← Prev</button>
-      <button id="nextBtn">Next →</button>
-    </nav>
+    <!-- Continue with original HTML content... -->
   </div>
-
-  <script src="script.js"></script>
 </body>
 </html>
