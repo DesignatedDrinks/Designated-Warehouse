@@ -2,36 +2,23 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <div class="app">
-    <header class="app-header">
-      <div>
-        <h1 class="label">Order</h1>
-        <h2 id="orderNumber" class="order-number"></h2>
-        <p id="customerAddress" class="address"></p>
-      </div>
-    </header>
-
-    <section class="summary">
-      <div id="boxSummary" class="box-summary"></div>
-      <div class="cans-summary">
-        <span id="totalCans"></span> cans
-      </div>
-    </section>
-
-    <section id="itemsList" class="items-list"></section>
-
-    <footer class="nav-footer">
-      <button id="prevBtn" class="nav-btn">←</button>
-      <button id="completeBtn" class="action-btn">✅ Complete & Next</button>
-      <button id="nextBtn" class="nav-btn">→</button>
-    </footer>
+  <div class="order-container">
+    <div class="order-header">
+      <h2 id="orderId" class="order-id">Order #…</h2>
+      <span id="customerName" class="customer-name"></span>
+    </div>
+    <div id="orderNotes" class="order-notes"></div>
+    <div id="orderItems" class="order-items"></div>
+    <div class="nav-buttons">
+      <button id="prevBtn" class="nav-btn">← Prev</button>
+      <button id="nextBtn" class="nav-btn">Next →</button>
+    </div>
   </div>
-
   <script src="script.js"></script>
 </body>
 </html>
