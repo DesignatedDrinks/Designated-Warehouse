@@ -1,44 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="styles.css" />
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <!-- Stats Dashboard -->
-  <div class="stats-cards">
-    <div class="stat-card">
-      <div class="stat-number" id="stat-pending">0</div>
-      <div class="stat-label">Pending Orders</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-number" id="stat-cans">0</div>
-      <div class="stat-label">Total Cans</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-number" id="stat-boxes">0</div>
-      <div class="stat-label">Boxes Needed</div>
-    </div>
-  </div>
+  <div class="app">
+    <header class="app-header">
+      <div>
+        <h1 class="label">Order</h1>
+        <h2 id="orderNumber" class="order-number"></h2>
+        <p id="customerAddress" class="address"></p>
+      </div>
+    </header>
 
-  <!-- Pack-size chart -->
-  <canvas id="packChart" width="400" height="100"></canvas>
+    <section class="summary">
+      <div id="boxSummary" class="box-summary"></div>
+      <div class="cans-summary">
+        <span id="totalCans"></span> cans
+      </div>
+    </section>
 
-  <!-- Main Order Viewer -->
-  <div class="order-container" id="orderContainer">
-    <div class="order-header">
-      <button id="prevBtn" class="nav-btn">⟵</button>
-      <h2 id="orderId">Order #...</h2>
-      <button id="nextBtn" class="nav-btn">⟶</button>
-    </div>
-    <div id="customerAddress" class="address">...</div>
-    <div id="boxCalculation" class="boxes">Calculating...</div>
-    <div id="itemsContainer" class="order-items"></div>
-    <button id="completeBtn" class="complete-btn">✅ Mark Complete & Next</button>
+    <section id="itemsList" class="items-list"></section>
+
+    <footer class="nav-footer">
+      <button id="prevBtn" class="nav-btn">←</button>
+      <button id="completeBtn" class="action-btn">✅ Complete & Next</button>
+      <button id="nextBtn" class="nav-btn">→</button>
+    </footer>
   </div>
 
   <script src="script.js"></script>
