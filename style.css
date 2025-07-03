@@ -1,9 +1,9 @@
 :root {
-  --bg: #ffffff; /* daytime mode */
-  --card: #f0f0f0;
-  --text: #111111;
-  --accent: #3b3bff;
-  --btn: #3b3bff;
+  --bg: #f0f0f5;
+  --card: #ffffff;
+  --text: #1c1c1e;
+  --accent: #4b00ff;
+  --btn: #4b00ff;
   --btn-text: #ffffff;
 }
 
@@ -15,15 +15,13 @@
 }
 
 /* Utility */
-.hidden {
-  display: none;
-}
+.hidden { display: none; }
 
 /* Base */
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -34,9 +32,10 @@ header {
   padding: 1rem;
   text-align: center;
   background: var(--card);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 header h1 {
-  font-size: 1.6rem;
+  font-size: 1.75rem;
   color: var(--accent);
 }
 
@@ -44,8 +43,9 @@ header h1 {
 #dashboard {
   display: flex;
   justify-content: space-around;
-  padding: 1rem;
   background: var(--card);
+  padding: 1rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 .dash-item {
   text-align: center;
@@ -56,27 +56,26 @@ header h1 {
 }
 .dash-label {
   font-size: 0.9rem;
-  opacity: 0.8;
+  color: #555;
 }
-/* pack picker dash button */
 .dash-button {
   background: var(--btn);
   color: var(--btn-text);
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
   font-size: 1rem;
+  cursor: pointer;
 }
 
-/* Orders View */
+/* Main Orders */
 .order-container {
   background: var(--card);
   border-radius: 8px;
-  padding: 1rem;
-  width: 100%;
-  max-width: 600px;
   margin: 1rem auto;
+  padding: 1rem;
+  max-width: 600px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
 .order-header {
   display: flex;
@@ -85,44 +84,45 @@ header h1 {
   margin-bottom: 1rem;
 }
 .nav-btn {
-  background: var(--btn);
+  background: var(--accent);
   color: var(--btn-text);
   border: none;
   padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
+  opacity: 0.9;
 }
 .nav-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
-.order-info {
-  text-align: center;
-}
 .order-info h2 {
-  font-size: 1.2rem;
-  margin-bottom: 0.2rem;
+  font-size: 1.25rem;
 }
 .customer-name {
   font-size: 1rem;
+  margin-top: 0.2rem;
 }
 .customer-address {
-  font-size: 0.9rem;
-  opacity: 0.7;
+  font-size: 0.85rem;
+  color: #555;
+  margin-top: 0.1rem;
 }
+
 .boxes-info {
-  background: #e0e0e0;
+  background: #e8e8ec;
   padding: 0.75rem;
-  border-radius: 4px;
+  border-radius: 6px;
   margin-bottom: 1rem;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1.4;
 }
+
 .items-list .item {
   display: flex;
   align-items: center;
-  padding: 0.5rem 0;
-  border-top: 1px solid #ccc;
+  padding: 0.6rem 0;
+  border-top: 1px solid #ddd;
 }
 .items-list .item:first-child {
   border-top: none;
@@ -131,63 +131,10 @@ header h1 {
   width: 60px;
   height: 60px;
   object-fit: contain;
-  border-radius: 4px;
-  margin-right: 1rem;
-  background: #ddd;
+  margin-right: 0.75rem;
+  border-radius: 6px;
+  background: #f5f5f7;
 }
 .items-list .details p {
-  margin-bottom: 0.25rem;
-}
-
-/* Packs View */
-#packsView {
-  width: 100%;
-  max-width: 600px;
-  margin: 1rem auto;
-  padding: 0 1rem;
-}
-.filter-container {
-  text-align: center;
-  margin-bottom: 1rem;
-}
-.filter-container label {
-  font-size: 1rem;
-  margin-right: 0.5rem;
-}
-.filter-container select {
-  padding: 0.5rem;
-  font-size: 1rem;
-  border-radius: 8px;
-  border: 1px solid #aaa;
-  background: var(--card);
-  color: var(--text);
-  outline: none;
-  cursor: pointer;
-}
-#results {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-.pack-item {
-  background: var(--card);
-  border-radius: 8px;
-  padding: 1rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  display: flex;
-  align-items: center;
-}
-.pack-item img {
-  width: 60px;
-  height: 60px;
-  object-fit: contain;
-  border-radius: 4px;
-  margin-right: 1rem;
-  background: #ddd;
-}
-.pack-item h3 {
-  margin: 0;
-  font-size: 1rem;
-  color: var(--accent);
+  margin-bottom: 0.2rem;
 }
