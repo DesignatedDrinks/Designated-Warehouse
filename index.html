@@ -1,1 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Designated Warehouse</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Designated Warehouse</h1>
+  </header>
 
+  <section id="dashboard">
+    <div class="dash-item">
+      <div class="dash-value" id="dash-pending">0</div>
+      <div class="dash-label">Pending Orders</div>
+    </div>
+    <div class="dash-item">
+      <div class="dash-value" id="dash-cans">0</div>
+      <div class="dash-label">Total Cans</div>
+    </div>
+    <div class="dash-item">
+      <div class="dash-value" id="dash-boxes">0</div>
+      <div class="dash-label">Boxes Needed</div>
+    </div>
+  </section>
+
+  <main>
+    <div class="order-container" id="order-container">
+      <div class="order-header">
+        <button id="prevBtn" class="nav-btn">←</button>
+        <div class="order-info">
+          <h2 id="orderId"></h2>
+          <div id="customerName" class="customer-name"></div>
+          <div id="customerAddress" class="customer-address"></div>
+        </div>
+        <button id="nextBtn" class="nav-btn">→</button>
+      </div>
+
+      <div class="boxes-info" id="boxesInfo">
+        <!-- Boxes and cans summary will go here -->
+      </div>
+
+      <div class="items-list" id="itemsContainer">
+        <!-- Product lines will go here -->
+      </div>
+    </div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
