@@ -108,7 +108,7 @@ body {
 }
 .items-list .item:first-child { border-top: none; }
 .items-list img {
-  width: 60px;    /* +20% from 50 */
+  width: 80px;    /* +20% from 50 */
   height: 60px;
   object-fit: contain;
   margin-right: 1rem;
