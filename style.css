@@ -66,15 +66,17 @@ body {
   display: flex;
   align-items: center;
 }
+/* replace your existing .order-header .nav-btn rule with this: */
 .order-header .nav-btn {
   background: var(--btn);
   color: var(--btn-text);
   border: none;
-  padding: 0.5rem;
+  padding: 0.75rem 1rem;    /* a bit more padding top/bottom and L/R */
   border-radius: 4px;
+  margin: 0 0.5rem;         /* space them in from the edges */
   flex: 0 0 auto;
-  z-index: 1;
 }
+
 .order-header .order-info {
   flex: 1;
   text-align: center;
