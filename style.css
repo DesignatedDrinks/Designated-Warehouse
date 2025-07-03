@@ -1,4 +1,4 @@
-:root {  
+:root {
   --bg: #121212;
   --card: #1e1e1e;
   --text: #e0e0e0;
@@ -34,15 +34,10 @@ header {
   padding: 1rem;
   text-align: center;
   background: var(--card);
-  display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 header h1 {
   font-size: 1.5rem;
   color: var(--accent);
-  flex: 1 100%;
 }
 
 /* Dashboard */
@@ -147,11 +142,6 @@ main {
   margin: 0 auto;
   padding: 1rem;
 }
-#packsView header {
-  background: var(--card);
-  padding: 1rem;
-  text-align: center;
-}
 #togglePacksBtn,
 #backToOrdersBtn {
   display: inline-block;
@@ -161,7 +151,7 @@ main {
   padding: 0.5rem 1rem;
   border-radius: 4px;
   cursor: pointer;
-  margin: 0.5rem;
+  margin-bottom: 1rem;
 }
 #packsView .filter-container {
   text-align: center;
@@ -204,13 +194,12 @@ main {
   font-size: 1rem;
   margin-bottom: 0.5rem;
   color: var(--accent);
-  flex: 1;
 }
 .pack-item img {
   width: 50px;
   height: 50px;
   object-fit: contain;
   border-radius: 4px;
-  margin-left: 1rem;
+  margin-right: 1rem;
   background: #333;
 }
