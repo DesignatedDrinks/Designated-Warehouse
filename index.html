@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -10,7 +10,7 @@
   <header>
     <div class="header-inner">
       <h1>Designated Warehouse</h1>
-      <button id="openPickerBtn" class="nav-btn">Pack Picker</button>
+      <button id="togglePacksBtn" class="nav-btn pack-btn">Pack Picker</button>
     </div>
   </header>
 
@@ -21,9 +21,6 @@
       <div class="dash-label">Pending Orders</div>
     </div>
     <div class="dash-item">
-      <!-- placeholder to keep spacing -->
-    </div>
-    <div class="dash-item">
       <div class="dash-value" id="dash-boxes">0</div>
       <div class="dash-label">Boxes Needed</div>
     </div>
@@ -31,37 +28,43 @@
 
   <!-- ORDERS VIEW -->
   <section id="ordersView">
-    <div class="order-container" id="order-container">
-      <div class="order-header">
-        <button id="prevBtn" class="nav-btn">←</button>
-        <div class="order-info">
-          <h2 id="orderId"></h2>
-          <div id="customerName" class="customer-name"></div>
-          <div id="customerAddress" class="customer-address"></div>
+    <main>
+      <div class="order-container" id="order-container">
+        <div class="order-header">
+          <button id="prevBtn" class="nav-btn">←</button>
+          <div class="order-info">
+            <h2 id="orderId"></h2>
+            <div id="customerName" class="customer-name"></div>
+            <div id="customerAddress" class="customer-address"></div>
+          </div>
+          <button id="nextBtn" class="nav-btn">→</button>
         </div>
-        <button id="nextBtn" class="nav-btn">→</button>
-      </div>
 
-      <div class="boxes-info" id="boxesInfo">
-        <!-- Boxes & cans summary -->
-      </div>
+        <div class="boxes-info" id="boxesInfo">
+          <!-- Boxes and cans summary -->
+        </div>
 
-      <div class="items-list" id="itemsContainer">
-        <!-- Items go here -->
+        <div class="items-list" id="itemsContainer">
+          <!-- Product lines -->
+        </div>
       </div>
-    </div>
+    </main>
   </section>
 
-  <!-- PACK PICKER IFRAME VIEW -->
-  <section id="pickerView" class="hidden">
-    <div class="picker-header">
-      <button id="closePickerBtn" class="nav-btn">← Back</button>
+  <!-- PACK PICKER VIEW -->
+  <section id="packsView" class="hidden">
+    <header>
+      <h1>Pack Picker</h1>
+      <button id="backToOrdersBtn" class="nav-btn">← Back</button>
+    </header>
+
+    <div class="filter-container">
+      <label for="packDropdown">Select Variety Pack:</label>
+      <select id="packDropdown">
+        <option value="All">All</option>
+      </select>
     </div>
-    <iframe
-      id="pickerIframe"
-      src="https://designateddrinks.github.io/Designated-Direct/"
-      frameborder="0"
-    ></iframe>
+    <div id="results">Loading packs…</div>
   </section>
 
   <script src="script.js"></script>
