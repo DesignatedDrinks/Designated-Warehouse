@@ -1,4 +1,4 @@
-<!DOCTYPE html>  
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -11,18 +11,15 @@
     <h1>Designated Warehouse</h1>
   </header>
 
-  <!-- DASHBOARD -->
+  <!-- DASHBOARD (always visible) -->
   <section id="dashboard">
     <div class="dash-item">
       <div class="dash-value" id="dash-pending">0</div>
       <div class="dash-label">Pending Orders</div>
     </div>
-
-    <!-- Pack Picker button in place of Total Cans -->
     <div class="dash-item">
       <button id="togglePacksBtn" class="dash-button">Pack Picker</button>
     </div>
-
     <div class="dash-item">
       <div class="dash-value" id="dash-boxes">0</div>
       <div class="dash-label">Boxes Needed</div>
@@ -33,6 +30,7 @@
   <section id="ordersView">
     <main>
       <div class="order-container" id="order-container">
+        <!-- swipe / nav -->
         <div class="order-header">
           <button id="prevBtn" class="nav-btn">←</button>
           <div class="order-info">
@@ -42,22 +40,18 @@
           </div>
           <button id="nextBtn" class="nav-btn">→</button>
         </div>
-
-        <div class="boxes-info" id="boxesInfo">
-          <!-- Boxes and cans summary will go here -->
-        </div>
-
-        <div class="items-list" id="itemsContainer">
-          <!-- Product lines will go here -->
-        </div>
+        <!-- boxes summary -->
+        <div class="boxes-info" id="boxesInfo"></div>
+        <!-- items list -->
+        <div class="items-list" id="itemsContainer"></div>
       </div>
     </main>
   </section>
 
   <!-- PACK PICKER VIEW (hidden until toggled) -->
   <section id="packsView" class="hidden">
-    <header>
-      <h1>Pack Picker</h1>
+    <header class="packs-header">
+      <h2>Pack Picker</h2>
       <button id="backToOrdersBtn" class="nav-btn">← Back</button>
     </header>
     <div class="filter-container">
