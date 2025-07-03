@@ -108,10 +108,10 @@ body {
 }
 .items-list .item:first-child { border-top: none; }
 .items-list img {
-  width: 80px;    /* +20% from 50 */
+  width: 60px;
   height: 60px;
   object-fit: contain;
-  margin-right: 1rem;
+  margin: 0.5rem 1rem 0.5rem 1rem; /* top, right, bottom, left */
   border-radius: 4px;
   background: #fafafa;
 }
