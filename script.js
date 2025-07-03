@@ -6,7 +6,6 @@ const sheetName     = 'Orders';
 const apiKey        = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 const ordersUrl     = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
-// Pack-Picker sheet
 const packsSheetId    = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
 const packTitlesUrl   = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Pack Titles!A2:A')}?key=${apiKey}`;
 const varietyPacksUrl = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Variety Packs!A2:C1000')}?key=${apiKey}`;
@@ -21,7 +20,7 @@ let varietyPacksData = [], packsLoaded = false;
 // ORDERS MODULE
 // ———————————————————————————————————————————————
 async function loadOrders() {
-  // show a quick loading state
+  // show “loading” placeholder
   document.getElementById('order-container').innerHTML =
     `<p style="text-align:center;opacity:.6">Loading orders…</p>`;
 
@@ -31,21 +30,10 @@ async function loadOrders() {
     const rows = json.values || [];
     if (rows.length < 2) throw new Error('No orders found');
 
-    // group by orderId
+    // group rows by orderId
     const grouped = {};
     rows.slice(1).forEach(r => {
-      const [
-        orderId,
-        customerName,
-        address,
-        itemTitle,
-        variantTitle,
-        qtyStr,
-        /* picked, */ 
-        notes,
-        imageUrl
-      ] = r;
-
+      const [ orderId, customerName, address, itemTitle, variantTitle, qtyStr, , notes, imageUrl ] = r;
       const qty = parseInt(qtyStr, 10) || 0;
       const m   = variantTitle.match(/(\d+)\s*pack/i);
       const packSize = m ? +m[1] : 1;
@@ -78,12 +66,11 @@ async function loadOrders() {
 }
 
 function calculateBoxes(n) {
-  let rem = n;
-  const counts = {24:0,12:0,6:0};
-  counts[24] = Math.floor(rem/24); rem %= 24;
-  counts[12] = Math.floor(rem/12); rem %= 12;
-  counts[6]  = Math.floor(rem/6);  rem %= 6;
-  if (rem > 0) counts[6]++;
+  let rem = n, counts = {24:0,12:0,6:0};
+  counts[24] = Math.floor(rem/24); rem %=24;
+  counts[12] = Math.floor(rem/12); rem %=12;
+  counts[6]  = Math.floor(rem/6);  rem %=6;
+  if (rem>0) counts[6]++;
   return counts;
 }
 
@@ -100,21 +87,17 @@ function updateDashboard() {
 function renderOrder() {
   const o = orders[currentIndex];
   if (!o) return;
-
   document.getElementById('orderId').textContent        = `Order #${o.orderId}`;
   document.getElementById('customerName').textContent   = o.customerName;
   document.getElementById('customerAddress').textContent= o.address;
 
-  const b = calculateBoxes(o.totalCans);
-  const lines = [];
+  const b = calculateBoxes(o.totalCans),
+        lines = [];
   if (b[24]) lines.push(`${b[24]} × 24-pack`);
   if (b[12]) lines.push(`${b[12]} × 12-pack`);
   if (b[6 ]) lines.push(`${b[6]} × 6-pack`);
-  const totalBoxes = b[24] + b[12] + b[6];
-
   document.getElementById('boxesInfo').innerHTML =
-    `<strong>Boxes Required:</strong> ${lines.join(', ')}<br>
-     <strong>Total Boxes:</strong> ${totalBoxes}`;
+    `<strong>Boxes Required:</strong> ${lines.join(', ')}`;
 
   document.getElementById('itemsContainer').innerHTML =
     o.items.map(it => `
@@ -133,22 +116,20 @@ function renderOrder() {
   document.getElementById('nextBtn').disabled = currentIndex === orders.length - 1;
 }
 
-// Prev / Next
+// navigation & swipe
 document.getElementById('prevBtn').onclick = () => {
-  if (currentIndex > 0) { currentIndex--; renderOrder(); }
+  if (currentIndex>0) { currentIndex--; renderOrder(); }
 };
 document.getElementById('nextBtn').onclick = () => {
-  if (currentIndex < orders.length - 1) { currentIndex++; renderOrder(); }
+  if (currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
 };
-
-// Swipe
 let startX = 0;
 const oc = document.getElementById('order-container');
 oc.addEventListener('touchstart', e => startX = e.changedTouches[0].screenX);
-oc.addEventListener('touchend',   e => {
+oc.addEventListener('touchend', e => {
   const dx = e.changedTouches[0].screenX - startX;
-  if (dx > 50 && currentIndex > 0)            { currentIndex--; renderOrder(); }
-  else if (dx < -50 && currentIndex < orders.length - 1) { currentIndex++; renderOrder(); }
+  if (dx > 50 && currentIndex>0)            { currentIndex--; renderOrder(); }
+  else if (dx < -50 && currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
 });
 
 // ———————————————————————————————————————————————
@@ -159,21 +140,22 @@ async function loadPacks() {
   results.textContent = 'Loading packs…';
 
   try {
-    const [titlesRes, packsRes] = await Promise.all([
+    const [ titlesRes, packsRes ] = await Promise.all([
       fetch(packTitlesUrl).then(r=>r.json()),
       fetch(varietyPacksUrl).then(r=>r.json())
     ]);
 
+    // build dropdown
     const dropdown = document.getElementById('packDropdown');
     dropdown.innerHTML = `<option value="All">All</option>`;
-    (titlesRes.values||[]).forEach(row => {
+    (titlesRes.values||[]).forEach(r => {
       const opt = document.createElement('option');
-      opt.value = row[0];
-      opt.textContent = row[0];
+      opt.value = r[0];
+      opt.textContent = r[0];
       dropdown.appendChild(opt);
     });
 
-    varietyPacksData = packsRes.values || [];
+    varietyPacksData = packsRes.values||[];
     displayPacks('All');
     packsLoaded = true;
 
@@ -186,16 +168,9 @@ async function loadPacks() {
 function displayPacks(filterTitle) {
   const results = document.getElementById('results');
   results.innerHTML = '';
-
   let list = varietyPacksData;
-  if (filterTitle !== 'All') {
-    list = list.filter(r => r[0] === filterTitle);
-  }
-  if (!list.length) {
-    results.textContent = 'No entries.';
-    return;
-  }
-
+  if (filterTitle !== 'All') list = list.filter(r=>r[0]===filterTitle);
+  if (!list.length) return void(results.textContent='No entries.');
   list.forEach(r => {
     const [packTitle, beerName, beerImageURL] = r;
     const div = document.createElement('div');
@@ -207,7 +182,6 @@ function displayPacks(filterTitle) {
     results.appendChild(div);
   });
 }
-
 document.getElementById('packDropdown').addEventListener('change', e => {
   displayPacks(e.target.value);
 });
@@ -226,6 +200,6 @@ document.getElementById('backToOrdersBtn').addEventListener('click', () => {
 });
 
 // ———————————————————————————————————————————————
-// INITIALISE
+// START
 // ———————————————————————————————————————————————
 loadOrders();
