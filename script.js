@@ -4,55 +4,59 @@
 const sheetId    = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const sheetName  = 'Orders';
 const apiKey     = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
-const ordersUrl  =
-  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
+const ordersUrl  = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
 let orders       = [];
 let currentIndex = 0;
 
 // ———————————————————————————————————————————————
-// LOAD & GROUP
+// FETCH & GROUP
 // ———————————————————————————————————————————————
 async function loadOrders() {
   try {
     const res  = await fetch(ordersUrl);
-    const json = await res.json();
-    const rows = json.values || [];
+    const js   = await res.json();
+    const rows = js.values || [];
     if (rows.length < 2) throw new Error('No orders found');
 
-    // header map → indexes
-    const h = rows[0].map(x=>x.trim());
+    // build index map from header row
+    const hdr = rows[0];
     const idx = {
-      orderId:      h.indexOf('orderId'),
-      customerName: h.indexOf('customerName'),
-      address:      h.indexOf('address'),
-      itemTitle:    h.indexOf('itemTitle'),
-      variantTitle: h.indexOf('variantTitle'),
-      qty:          h.indexOf('qty'),
-      notes:        h.indexOf('notes'),
-      imageUrl:     h.indexOf('imageUrl')
+      orderId:      hdr.indexOf('orderId'),
+      customerName: hdr.indexOf('customerName'),
+      address:      hdr.indexOf('address'),
+      itemTitle:    hdr.indexOf('itemTitle'),
+      variantTitle: hdr.indexOf('variantTitle'),
+      qty:          hdr.indexOf('qty'),
+      notes:        hdr.indexOf('notes'),
+      imageUrl:     hdr.indexOf('imageUrl')
     };
 
-    // group
     const G = {};
-    rows.slice(1).forEach(r => {
+    rows.slice(1).forEach(r=>{
       const id    = r[idx.orderId];
       const name  = r[idx.customerName];
       const addr  = r[idx.address];
       const item  = r[idx.itemTitle];
       const variant = r[idx.variantTitle];
-      const count = parseInt(r[idx.qty],10) || 0;
-      const note = r[idx.notes] || '';
-      const img  = r[idx.imageUrl] || '';
+      const count = parseInt(r[idx.qty],10)||0;
+      const note  = r[idx.notes]||'';
+      const img   = r[idx.imageUrl]||'';
 
-      // match “12-pack” or “12 Pack”
+      // extract “12-pack” or “12 Pack”
       const m = variant.match(/(\d+)[-\s]*pack/i);
-      const packSize = m ? parseInt(m[1],10) : 1;
-      const cans = count * packSize;
+      const ps = m ? parseInt(m[1],10) : 1;
+      const cans = count * ps;
 
-      if (!G[id]) {
-        G[id] = { orderId:id, customerName:name, address:addr, notes:note, items:[], totalCans:0 };
-      }
+      if (!G[id]) G[id] = {
+        orderId: id,
+        customerName: name,
+        address: addr,
+        notes: note,
+        items: [],
+        totalCans: 0
+      };
+
       G[id].items.push({ itemTitle:item, cans, imageUrl:img });
       G[id].totalCans += cans;
     });
@@ -62,20 +66,20 @@ async function loadOrders() {
     updateDashboard();
     renderOrder();
   }
-  catch(e) {
-    console.error(e);
+  catch(err) {
+    console.error(err);
     document.getElementById('order-container').innerHTML =
       `<p style="text-align:center;opacity:.6">Failed to load orders.</p>`;
   }
 }
 
 // ———————————————————————————————————————————————
-// BOX CALC (24 & 12 only)
+// BOX CALC: only 24 & 12
 // ———————————————————————————————————————————————
 function calculateBoxes(n) {
   const full24 = Math.floor(n/24);
   const rem24  = n % 24;
-  const full12 = rem24 > 0 ? Math.ceil(rem24/12) : 0;
+  const full12 = rem24>0 ? Math.ceil(rem24/12) : 0;
   return { 24:full24, 12:full12 };
 }
 
@@ -84,16 +88,16 @@ function calculateBoxes(n) {
 // ———————————————————————————————————————————————
 function updateDashboard() {
   document.getElementById('dash-pending').textContent = orders.length;
-  let sum = 0;
-  orders.forEach(o => {
+  let boxSum = 0;
+  orders.forEach(o=>{
     const b = calculateBoxes(o.totalCans);
-    sum += b[24] + b[12];
+    boxSum += b[24] + b[12];
   });
-  document.getElementById('dash-boxes').textContent = sum;
+  document.getElementById('dash-boxes').textContent = boxSum;
 }
 
 // ———————————————————————————————————————————————
-// RENDER SINGLE ORDER
+// RENDER CURRENT ORDER
 // ———————————————————————————————————————————————
 function renderOrder() {
   const o = orders[currentIndex];
@@ -102,8 +106,8 @@ function renderOrder() {
   // strip extra “#”
   document.getElementById('orderId').textContent =
     `Order #${o.orderId.replace(/^#+/, '')}`;
-  document.getElementById('customerName').textContent   = o.customerName;
-  document.getElementById('customerAddress').textContent= o.address;
+  document.getElementById('customerName').textContent    = o.customerName;
+  document.getElementById('customerAddress').textContent = o.address;
 
   const b = calculateBoxes(o.totalCans);
   const lines = [];
@@ -112,16 +116,16 @@ function renderOrder() {
   const totalBoxes = b[24] + b[12];
 
   document.getElementById('boxesInfo').innerHTML =
-    `<strong>Boxes Required:</strong> ${lines.join(', ')}<br>` +
-    `<strong>Total Boxes:</strong> ${totalBoxes}<br>` +
+    `<strong>Boxes Required:</strong> ${lines.join(', ')}<br>`+
+    `<strong>Total Boxes:</strong> ${totalBoxes}<br>`+
     `<strong>Total Cans:</strong> ${o.totalCans}`;
 
   document.getElementById('itemsContainer').innerHTML =
-    o.items.map(it => `
+    o.items.map(it=>`
       <div class="item">
         <img src="${it.imageUrl}"
              onerror="this.src='https://via.placeholder.com/60'"
-             alt="${it.itemTitle}" />
+             alt="${it.itemTitle}">
         <div class="details">
           <p><strong>${it.itemTitle}</strong></p>
           <p>${it.cans} cans</p>
@@ -136,10 +140,10 @@ function renderOrder() {
 // ———————————————————————————————————————————————
 // NAV & SWIPE
 // ———————————————————————————————————————————————
-document.getElementById('prevBtn').onclick = ()=>{
+document.getElementById('prevBtn').onclick = () => {
   if (currentIndex>0) { currentIndex--; renderOrder(); }
 };
-document.getElementById('nextBtn').onclick = ()=>{
+document.getElementById('nextBtn').onclick = () => {
   if (currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
 };
 let startX=0;
@@ -152,23 +156,20 @@ oc.addEventListener('touchend', e=>{
 });
 
 // ———————————————————————————————————————————————
-// INLINE PACK PICKER
+// PACK PICKER (iframe)
 // ———————————————————————————————————————————————
 document.getElementById('togglePacksBtn')
-  .addEventListener('click', () => {
+  .onclick = () => {
     document.getElementById('ordersView').classList.add('hidden');
     document.getElementById('packsView').classList.remove('hidden');
     const f = document.getElementById('packFrame');
-    if (!f.src) {
-      f.src = 'https://designateddrinks.github.io/Designated-Direct/';
-    }
-  });
-
+    if (!f.src) f.src = 'https://designateddrinks.github.io/Designated-Direct/';
+  };
 document.getElementById('backToOrdersBtn')
-  .addEventListener('click', () => {
+  .onclick = () => {
     document.getElementById('packsView').classList.add('hidden');
     document.getElementById('ordersView').classList.remove('hidden');
-  });
+  };
 
 // ———————————————————————————————————————————————
 // BOOT
