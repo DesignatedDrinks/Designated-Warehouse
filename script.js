@@ -1,4 +1,4 @@
-// ——————————————————————————————————————————————— 
+// ———————————————————————————————————————————————
 // CONFIG
 // ———————————————————————————————————————————————
 const sheetId       = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
@@ -6,7 +6,6 @@ const sheetName     = 'Orders';
 const apiKey        = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 const ordersUrl     = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
-// Pack Picker sheet (same or separate file)
 const packsSheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
 const packTitlesUrl   = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Pack Titles!A2:A')}?key=${apiKey}`;
 const varietyPacksUrl = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Variety Packs!A2:C1000')}?key=${apiKey}`;
@@ -31,7 +30,6 @@ async function loadOrders() {
     const rows = json.values || [];
     if (rows.length < 2) throw new Error('No orders found');
 
-    // group by orderId
     const grouped = {};
     rows.slice(1).forEach(r => {
       let [orderId, customerName, address, itemTitle, variantTitle, qtyStr, , notes, imageUrl] = r;
@@ -116,7 +114,7 @@ function renderOrder(){
   document.getElementById('nextBtn').disabled = currentIndex===orders.length-1;
 }
 
-// navigation & swipe
+// prev/next & swipe
 document.getElementById('prevBtn').onclick = ()=>{ if(currentIndex>0){ currentIndex--; renderOrder(); }};
 document.getElementById('nextBtn').onclick = ()=>{ if(currentIndex<orders.length-1){ currentIndex++; renderOrder(); }};
 let startX=0;
@@ -185,6 +183,6 @@ document.getElementById('backToOrdersBtn').onclick = ()=>{
 };
 
 // ———————————————————————————————————————————————
-// INIT
+// INITIALIZE
 // ———————————————————————————————————————————————
 loadOrders();
