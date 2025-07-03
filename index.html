@@ -11,15 +11,17 @@
     <h1>Designated Warehouse</h1>
   </header>
 
-  <!-- DASHBOARD (always visible) -->
+  <!-- DASHBOARD -->
   <section id="dashboard">
     <div class="dash-item">
       <div class="dash-value" id="dash-pending">0</div>
       <div class="dash-label">Pending Orders</div>
     </div>
+
     <div class="dash-item">
       <button id="togglePacksBtn" class="dash-button">Pack Picker</button>
     </div>
+
     <div class="dash-item">
       <div class="dash-value" id="dash-boxes">0</div>
       <div class="dash-label">Boxes Needed</div>
@@ -28,30 +30,30 @@
 
   <!-- ORDERS VIEW -->
   <section id="ordersView">
-    <main>
-      <div class="order-container" id="order-container">
-        <!-- swipe / nav -->
-        <div class="order-header">
-          <button id="prevBtn" class="nav-btn">←</button>
-          <div class="order-info">
-            <h2 id="orderId"></h2>
-            <div id="customerName" class="customer-name"></div>
-            <div id="customerAddress" class="customer-address"></div>
-          </div>
-          <button id="nextBtn" class="nav-btn">→</button>
+    <div class="order-container" id="order-container">
+      <div class="order-header">
+        <button id="prevBtn" class="nav-btn">←</button>
+        <div class="order-info">
+          <h2 id="orderId"></h2>
+          <div id="customerName" class="customer-name"></div>
+          <div id="customerAddress" class="customer-address"></div>
         </div>
-        <!-- boxes summary -->
-        <div class="boxes-info" id="boxesInfo"></div>
-        <!-- items list -->
-        <div class="items-list" id="itemsContainer"></div>
+        <button id="nextBtn" class="nav-btn">→</button>
       </div>
-    </main>
+
+      <div class="boxes-info" id="boxesInfo">
+        <!-- Boxes summary -->
+      </div>
+      <div class="items-list" id="itemsContainer">
+        <!-- Items -->
+      </div>
+    </div>
   </section>
 
-  <!-- PACK PICKER VIEW (hidden until toggled) -->
+  <!-- PACK PICKER VIEW -->
   <section id="packsView" class="hidden">
-    <header class="packs-header">
-      <h2>Pack Picker</h2>
+    <header>
+      <h1>Pack Picker</h1>
       <button id="backToOrdersBtn" class="nav-btn">← Back</button>
     </header>
     <div class="filter-container">
