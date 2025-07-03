@@ -7,17 +7,13 @@
   --btn-text: #ffffff;
 }
 
-/* Reset */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
-
-/* Utility */
 .hidden { display: none; }
 
-/* Base */
 body {
   background: var(--bg);
   color: var(--text);
@@ -47,9 +43,7 @@ header h1 {
   padding: 1rem;
   box-shadow: 0 1px 4px rgba(0,0,0,0.1);
 }
-.dash-item {
-  text-align: center;
-}
+.dash-item { text-align: center; }
 .dash-value {
   font-size: 1.5rem;
   font-weight: bold;
@@ -68,7 +62,7 @@ header h1 {
   cursor: pointer;
 }
 
-/* Main Orders */
+/* Order Card */
 .order-container {
   background: var(--card);
   border-radius: 8px;
@@ -118,6 +112,7 @@ header h1 {
   line-height: 1.4;
 }
 
+/* Line Items */
 .items-list .item {
   display: flex;
   align-items: center;
@@ -137,4 +132,27 @@ header h1 {
 }
 .items-list .details p {
   margin-bottom: 0.2rem;
+}
+
+/* Pack Picker */
+#packsView {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.packs-header {
+  background: var(--card);
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.packs-header h1 {
+  flex: 1;
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+#packFrame {
+  flex: 1;
+  border: none;
 }
