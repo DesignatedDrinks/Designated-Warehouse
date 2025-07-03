@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -17,12 +17,9 @@
       <div class="dash-value" id="dash-pending">0</div>
       <div class="dash-label">Pending Orders</div>
     </div>
-
-    <!-- Pack Picker button in place of Total Cans -->
     <div class="dash-item">
       <button id="togglePacksBtn" class="dash-button">Pack Picker</button>
     </div>
-
     <div class="dash-item">
       <div class="dash-value" id="dash-boxes">0</div>
       <div class="dash-label">Boxes Needed</div>
@@ -44,7 +41,7 @@
         </div>
 
         <div class="boxes-info" id="boxesInfo">
-          <!-- Boxes and total cans summary will go here -->
+          <!-- Boxes and cans summary will go here -->
         </div>
 
         <div class="items-list" id="itemsContainer">
@@ -52,21 +49,6 @@
         </div>
       </div>
     </main>
-  </section>
-
-  <!-- PACK PICKER VIEW (hidden until toggled) -->
-  <section id="packsView" class="hidden">
-    <header>
-      <h1>Pack Picker</h1>
-      <button id="backToOrdersBtn" class="nav-btn">← Back</button>
-    </header>
-    <div class="filter-container">
-      <label for="packDropdown">Select Variety Pack:</label>
-      <select id="packDropdown">
-        <option value="All">All</option>
-      </select>
-    </div>
-    <div id="results">Loading packs…</div>
   </section>
 
   <script src="script.js"></script>
