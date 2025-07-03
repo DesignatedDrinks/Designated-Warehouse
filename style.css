@@ -51,6 +51,44 @@ header h1 {
 #openPickerBtn {
   right: 1rem;
 }
+/* — Header flex wrapper — */
+header {
+  background: var(--card);
+  padding: 1rem;
+}
+
+.header-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Reset any absolute/transform you had on the button */
+#openPickerBtn {
+  position: static;
+  transform: none;
+  margin-left: auto;
+}
+
+/* — Order‐header arrows alignment — */
+.order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.order-header .nav-btn {
+  flex: 0 0 auto;
+}
+
+.order-header .nav-btn:first-of-type {
+  margin-right: auto;
+}
+
+.order-header .nav-btn:last-of-type {
+  margin-left: auto;
+}
 
 /* Dashboard */
 #dashboard {
