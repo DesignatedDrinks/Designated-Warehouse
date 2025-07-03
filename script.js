@@ -5,10 +5,9 @@ const sheetId       = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const sheetName     = 'Orders';
 const apiKey        = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 
-// ✂️ <-- Note the backticks here
+// ← backticks so ${sheetId} and ${apiKey} resolve
 const ordersUrl     = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
-// Pack Picker sheet
 const packsSheetId    = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
 const packTitlesUrl   = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Pack Titles!A2:A')}?key=${apiKey}`;
 const varietyPacksUrl = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Variety Packs!A2:C1000')}?key=${apiKey}`;
@@ -29,36 +28,16 @@ async function loadOrders() {
     const rows = json.values || [];
     if (rows.length < 2) throw new Error('No orders found');
 
-    // group by orderId
+    // group rows by orderId
     const grouped = {};
     rows.slice(1).forEach(r => {
-      const [
-        orderId,
-        customerName,
-        address,
-        itemTitle,
-        variantTitle,
-        qtyStr,
-        picked,
-        notes,
-        imageUrl
-      ] = r;
-
+      const [ orderId, customerName, address, itemTitle, variantTitle, qtyStr, , notes, imageUrl ] = r;
       const qty = parseInt(qtyStr, 10) || 0;
-      let packSize = 1;
-      const m = variantTitle.match(/(\d+)\s*pack/i);
-      if (m) packSize = +m[1];
+      const packSize = (variantTitle.match(/(\d+)\s*pack/i) || [1,1])[1];
       const cans = qty * packSize;
 
       if (!grouped[orderId]) {
-        grouped[orderId] = {
-          orderId,
-          customerName,
-          address,
-          notes: notes || '',
-          items: [],
-          totalCans: 0
-        };
+        grouped[orderId] = { orderId, customerName, address, notes: notes||'', items: [], totalCans: 0 };
       }
       grouped[orderId].items.push({ itemTitle, cans, imageUrl });
       grouped[orderId].totalCans += cans;
@@ -71,34 +50,28 @@ async function loadOrders() {
 
   } catch (err) {
     document.getElementById('order-container').innerHTML =
-      `<p style="text-align:center;opacity:.6">Failed to load orders.</p>`;
+      `<p style="padding:1rem;text-align:center;opacity:.6">Failed to load orders.</p>`;
     console.error(err);
   }
 }
 
 function calculateBoxes(n) {
-  let rem = n;
-  const counts = { 24:0, 12:0, 6:0 };
+  let rem = n, counts = {24:0,12:0,6:0};
   counts[24] = Math.floor(rem/24); rem %= 24;
   counts[12] = Math.floor(rem/12); rem %= 12;
   counts[6]  = Math.floor(rem/6);  rem %= 6;
-  if (rem > 0) counts[6]++;
+  if (rem) counts[6]++;
   return counts;
 }
 
 function updateDashboard() {
   const pending = orders.length;
-  let totalCans = 0,
-      totalBoxes = 0;
-
+  let totalBoxes = 0;
   orders.forEach(o => {
-    totalCans += o.totalCans;
     const b = calculateBoxes(o.totalCans);
     totalBoxes += b[24] + b[12] + b[6];
   });
-
   document.getElementById('dash-pending').textContent = pending;
-  document.getElementById('dash-cans').textContent    = totalCans;
   document.getElementById('dash-boxes').textContent  = totalBoxes;
 }
 
@@ -110,17 +83,15 @@ function renderOrder() {
   document.getElementById('customerName').textContent    = o.customerName;
   document.getElementById('customerAddress').textContent = o.address;
 
-  const b = calculateBoxes(o.totalCans);
-  const lines = [];
-  if (b[24]) lines.push(`${b[24]} × 24-pack`);
-  if (b[12]) lines.push(`${b[12]} × 12-pack`);
-  if (b[6 ]) lines.push(`${b[6]} × 6-pack`);
+  const b = calculateBoxes(o.totalCans), lines = [];
+  if (b[24]) lines.push(`${b[24]}×24-pack`);
+  if (b[12]) lines.push(`${b[12]}×12-pack`);
+  if (b[6 ]) lines.push(`${b[6]}×6-pack`);
   const totalBoxes = b[24] + b[12] + b[6];
 
   document.getElementById('boxesInfo').innerHTML =
     `<strong>Boxes Required:</strong> ${lines.join(', ')}<br>` +
-    `<strong>Total Boxes:</strong> ${totalBoxes}<br>` +
-    `<strong>Total Cans:</strong> ${o.totalCans}`;
+    `<strong>Total Boxes:</strong> ${totalBoxes}`;
 
   document.getElementById('itemsContainer').innerHTML =
     o.items.map(it => `
@@ -139,33 +110,20 @@ function renderOrder() {
   document.getElementById('nextBtn').disabled = currentIndex === orders.length - 1;
 }
 
-// navigation
+// ← arrows & swipe
 document.getElementById('prevBtn').onclick = () => {
-  if (currentIndex > 0) {
-    currentIndex--;
-    renderOrder();
-  }
+  if (currentIndex > 0) { currentIndex--; renderOrder(); }
 };
 document.getElementById('nextBtn').onclick = () => {
-  if (currentIndex < orders.length - 1) {
-    currentIndex++;
-    renderOrder();
-  }
+  if (currentIndex < orders.length - 1) { currentIndex++; renderOrder(); }
 };
-
-// swipe gestures
 let startX = 0;
 const oc = document.getElementById('order-container');
 oc.addEventListener('touchstart', e => startX = e.changedTouches[0].screenX);
 oc.addEventListener('touchend', e => {
   const dx = e.changedTouches[0].screenX - startX;
-  if (dx > 50 && currentIndex > 0) {
-    currentIndex--;
-    renderOrder();
-  } else if (dx < -50 && currentIndex < orders.length - 1) {
-    currentIndex++;
-    renderOrder();
-  }
+  if (dx > 50 && currentIndex>0)        { currentIndex--; renderOrder(); }
+  else if (dx < -50 && currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
 });
 
 // ———————————————————————————————————————————————
@@ -173,35 +131,31 @@ oc.addEventListener('touchend', e => {
 // ———————————————————————————————————————————————
 async function loadPacks() {
   try {
-    const [titlesRes, packsRes] = await Promise.all([
-      fetch(packTitlesUrl).then(r => r.json()),
-      fetch(varietyPacksUrl).then(r => r.json())
+    const [tRes, pRes] = await Promise.all([
+      fetch(packTitlesUrl).then(r=>r.json()),
+      fetch(varietyPacksUrl).then(r=>r.json())
     ]);
-    const dropdown = document.getElementById('packDropdown');
-    titlesRes.values?.forEach(row => {
+    const dd = document.getElementById('packDropdown');
+    tRes.values?.forEach(r => {
       const opt = document.createElement('option');
-      opt.value = row[0];
-      opt.textContent = row[0];
-      dropdown.appendChild(opt);
+      opt.value = r[0]; opt.textContent = r[0];
+      dd.appendChild(opt);
     });
-    varietyPacksData = packsRes.values || [];
+    varietyPacksData = pRes.values||[];
     displayPacks('All');
     packsLoaded = true;
-  } catch (err) {
+  } catch (e) {
     document.getElementById('results').textContent = 'Failed to load packs.';
   }
 }
 
 function displayPacks(filterTitle) {
-  const results = document.getElementById('results');
-  results.innerHTML = '';
-  let filtered = varietyPacksData;
-  if (filterTitle !== 'All') filtered = filtered.filter(r => r[0] === filterTitle);
-  if (!filtered.length) {
-    results.textContent = 'No entries.';
-    return;
-  }
-  filtered.forEach(r => {
+  const out = document.getElementById('results');
+  out.innerHTML = '';
+  let list = varietyPacksData;
+  if (filterTitle !== 'All') list = list.filter(r=>r[0]===filterTitle);
+  if (!list.length) return out.textContent = 'No entries.';
+  list.forEach(r => {
     const [packTitle, beerName, beerImageURL] = r;
     const div = document.createElement('div');
     div.className = 'pack-item';
@@ -209,12 +163,10 @@ function displayPacks(filterTitle) {
       <h3>${packTitle} - ${beerName}</h3>
       <img src="${beerImageURL}" alt="${beerName}" />
     `;
-    results.appendChild(div);
+    out.appendChild(div);
   });
 }
-
-document.getElementById('packDropdown')
-  .addEventListener('change', e => displayPacks(e.target.value));
+document.getElementById('packDropdown').addEventListener('change', e => displayPacks(e.target.value));
 
 // ———————————————————————————————————————————————
 // VIEW TOGGLING
@@ -230,6 +182,6 @@ document.getElementById('backToOrdersBtn').onclick = () => {
 };
 
 // ———————————————————————————————————————————————
-// INITIALIZE
+// INIT
 // ———————————————————————————————————————————————
 loadOrders();
