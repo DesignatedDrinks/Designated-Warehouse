@@ -62,19 +62,30 @@ async function loadOrders() {
 }
 
 function calculateBoxes(n) {
-  let best = { total: Infinity, counts: { 24: 0, 12: 0, 6: 0 } };
+  // Small order rules
+  if (n <= 6)  return { 24: 0, 12: 0, 6: 1 };
+  if (n <= 12) return { 24: 0, 12: 1, 6: 0 };
 
-  for (let num24 = 0; num24 <= Math.floor(n / 24); num24++) {
-    for (let num12 = 0; num12 <= Math.floor((n - num24 * 24) / 12); num12++) {
-      const remaining = n - (num24 * 24 + num12 * 12);
-      const num6 = Math.ceil(remaining / 6);
-      const totalCans = num24 * 24 + num12 * 12 + num6 * 6;
+  let best = { total: Infinity, totalCans: Infinity, counts: { 24: 0, 12: 0, 6: 0 } };
 
-      if (totalCans >= n) {
-        const totalBoxes = num24 + num12 + num6;
-        if (totalBoxes < best.total) {
-          best.total = totalBoxes;
-          best.counts = { 24: num24, 12: num12, 6: num6 };
+  // Brute-force all combinations of 24, 12, and 6-pack boxes
+  for (let a = 0; a <= Math.ceil(n / 24); a++) {
+    for (let b = 0; b <= Math.ceil(n / 12); b++) {
+      for (let c = 0; c <= Math.ceil(n / 6); c++) {
+        const totalCans = a * 24 + b * 12 + c * 6;
+        const totalBoxes = a + b + c;
+
+        if (totalCans >= n) {
+          // Always prefer fewer boxes first
+          const isBetter =
+            totalBoxes < best.total ||
+            (totalBoxes === best.total && totalCans < best.totalCans);
+
+          if (isBetter) {
+            best.total = totalBoxes;
+            best.totalCans = totalCans;
+            best.counts = { 24: a, 12: b, 6: c };
+          }
         }
       }
     }
@@ -82,6 +93,7 @@ function calculateBoxes(n) {
 
   return best.counts;
 }
+
 
 function updateDashboard(){
   const pending = orders.length;
