@@ -62,11 +62,27 @@ async function loadOrders() {
 }
 
 function calculateBoxes(n) {
-  let rem = n, counts = {24:0,12:0};
-  counts[24] = Math.floor(rem/24); rem%=24;
-  counts[12] = Math.ceil(rem/12);
+  let rem = n;
+  const counts = {24: 0, 12: 0, 6: 0};
+
+  // Use as many 24-pack boxes as possible
+  counts[24] = Math.floor(rem / 24);
+  rem %= 24;
+
+  // Prefer 1×12 over 2×6 if possible
+  if (rem >= 12) {
+    counts[12] = 1;
+    rem -= 12;
+  }
+
+  // Use 6-pack boxes for any remaining cans
+  if (rem > 0) {
+    counts[6] = Math.ceil(rem / 6);
+  }
+
   return counts;
 }
+
 
 function updateDashboard(){
   const pending = orders.length;
