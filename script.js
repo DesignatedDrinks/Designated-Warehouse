@@ -62,27 +62,26 @@ async function loadOrders() {
 }
 
 function calculateBoxes(n) {
-  let rem = n;
-  const counts = {24: 0, 12: 0, 6: 0};
+  let best = { total: Infinity, counts: { 24: 0, 12: 0, 6: 0 } };
 
-  // Use as many 24-pack boxes as possible
-  counts[24] = Math.floor(rem / 24);
-  rem %= 24;
+  for (let num24 = 0; num24 <= Math.floor(n / 24); num24++) {
+    for (let num12 = 0; num12 <= Math.floor((n - num24 * 24) / 12); num12++) {
+      const remaining = n - (num24 * 24 + num12 * 12);
+      const num6 = Math.ceil(remaining / 6);
+      const totalCans = num24 * 24 + num12 * 12 + num6 * 6;
 
-  // Prefer 1×12 over 2×6 if possible
-  if (rem >= 12) {
-    counts[12] = 1;
-    rem -= 12;
+      if (totalCans >= n) {
+        const totalBoxes = num24 + num12 + num6;
+        if (totalBoxes < best.total) {
+          best.total = totalBoxes;
+          best.counts = { 24: num24, 12: num12, 6: num6 };
+        }
+      }
+    }
   }
 
-  // Use 6-pack boxes for any remaining cans
-  if (rem > 0) {
-    counts[6] = Math.ceil(rem / 6);
-  }
-
-  return counts;
+  return best.counts;
 }
-
 
 function updateDashboard(){
   const pending = orders.length;
