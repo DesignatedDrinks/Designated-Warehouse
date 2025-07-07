@@ -147,14 +147,6 @@ document.getElementById('prevBtn').onclick = ()=> {
 document.getElementById('nextBtn').onclick = ()=> {
   if (currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
 };
-let startX=0;
-const oc = document.getElementById('order-container');
-oc.addEventListener('touchstart', e=> startX = e.changedTouches[0].screenX);
-oc.addEventListener('touchend', e=>{
-  const dx = e.changedTouches[0].screenX - startX;
-  if (dx>50 && currentIndex>0)        { currentIndex--; renderOrder(); }
-  else if (dx<-50 && currentIndex<orders.length-1) { currentIndex++; renderOrder(); }
-});
 
 // ———————————————————————————————————————————————
 // PACK PICKER MODULE
