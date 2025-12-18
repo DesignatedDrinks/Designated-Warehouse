@@ -7,157 +7,177 @@
   --btn-text: #fff;
 }
 
-/* Reset */
-* { box-sizing: border-box; margin:0; padding:0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* Header */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.hidden { display: none; }
+
 header {
   background: var(--card);
   padding: 1rem;
 }
+
 .header-inner {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.header-inner h1 {
-  color: var(--accent);
-  font-size: 1.75rem;
-}
-.pack-btn {
-  background: var(--btn);
-  color: var(--btn-text);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 1rem;
-}
 
-/* Dashboard */
-#dashboard {
-  display: flex;
-  justify-content: space-around;
-  background: var(--card);
-  padding: 1rem;
-  border-bottom: 1px solid #ddd;
-}
-.dash-item { text-align: center; }
-.dash-value {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: var(--text);
-}
-.dash-label {
-  font-size: 0.9rem;
-  color: #555;
-}
-
-/* Main orders view */
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: sans-serif;
-  min-height: 100vh;
-}
-.order-container {
-  max-width: 600px;
-  margin: 1rem auto;
-}
-.order-header {
-  display: flex;
-  align-items: center;
-}
-/* replace your existing .order-header .nav-btn rule with this: */
-.order-header .nav-btn {
+.nav-btn {
   background: var(--btn);
   color: var(--btn-text);
   border: none;
-  padding: 0.75rem 1rem;    /* a bit more padding top/bottom and L/R */
-  border-radius: 4px;
-  margin: 0 1.5rem;         /* space them in from the edges */
-  flex: 0 0 auto;
+  border-radius: 10px;
+  padding: 0.6rem 1rem;
+  font-weight: 700;
 }
 
-.order-header .order-info {
-  flex: 1;
-  text-align: center;
-}
-.order-header .order-info h2 {
-  margin-bottom: 0.25rem;
-}
-.customer-name {
-  font-size: 1rem;
-  font-weight: 500;
-}
-.customer-address {
-  font-size: 0.875rem;
-  color: #666;
-}
-
-.boxes-info {
-  background: #eee;
-  padding: 0.75rem;
-  border-radius: 6px;
-  margin: 1rem 0;
-  font-size: 0.95rem;
-}
-.items-list .item {
-  display: flex;
-  align-items: center;
-  padding: 0.5rem 0;
-  border-top: 1px solid #ddd;
-}
-.items-list .item:first-child { border-top: none; }
-.items-list img {
-  width: 60px;
-  height: 60px;
-  object-fit: contain;
-  margin: 0.5rem 1rem 0.5rem 1rem; /* top, right, bottom, left */
-  border-radius: 4px;
-  background: #fafafa;
-}
-.items-list .details p {
-  margin-bottom: 0.25rem;
-  font-size: 1rem;
-}
-
-/* Packs view */
-.hidden { display: none; }
-#packsView header {
-  background: var(--card);
-  padding: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-#backToOrdersBtn {
+/* Buttons */
+.primary-btn {
+  width: 100%;
+  padding: 1.1rem;
+  font-size: 1.2rem;
+  font-weight: 900;
+  border-radius: 14px;
+  border: none;
   background: var(--btn);
-  color: var(--btn-text);
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
+  color: #fff;
+  margin-top: 1rem;
 }
-.filter-container {
-  max-width: 600px;
+
+.secondary-btn {
+  width: 100%;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 2px solid #ddd;
+  background: #fff;
+  font-weight: 700;
+}
+
+/* START VIEW */
+#startView {
+  max-width: 720px;
   margin: 1rem auto;
+  padding: 1rem;
+}
+
+.dash {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.dash-item {
+  background: var(--card);
+  padding: 1.2rem;
+  border-radius: 16px;
   text-align: center;
 }
-.filter-container select {
-  padding: 0.5rem;
-  border-radius: 6px;
+
+.dash-value {
+  font-size: 2rem;
+  font-weight: 900;
 }
-#results {
-  max-width: 600px;
-  margin: 1rem auto;
-}
-.pack-item {
-  background: var(--card);
-  margin-bottom: 1rem;
+
+/* PICK VIEW */
+#pickView {
+  max-width: 720px;
+  margin: auto;
   padding: 1rem;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
 }
-.pack-item img {
-  width: 50px;
-  height: 50px;
-  margin-right: 1rem;
+
+.pick-location {
+  background: var(--card);
+  padding: 1rem;
+  font-size: 1.4rem;
+  font-weight: 900;
+  text-align: center;
+  border-radius: 16px;
+  margin-bottom: 1rem;
+}
+
+.pick-card {
+  background: var(--card);
+  padding: 1rem;
+  border-radius: 18px;
+}
+
+#pickImage {
+  width: 100%;
+  height: 300px;
+  object-fit: contain;
+  background: #fafafa;
+  border-radius: 16px;
+  margin-bottom: 1rem;
+}
+
+.pick-name {
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.pick-qty {
+  font-size: 1.8rem;
+  font-weight: 1000;
+  margin: 0.6rem 0 1rem;
+}
+
+/* MODAL */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-end;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: #fff;
+  width: 100%;
+  max-width: 720px;
+  margin: auto;
+  border-radius: 18px;
+  padding: 1rem;
+}
+
+.modal-option {
+  width: 100%;
+  padding: 1rem;
+  margin-bottom: 0.6rem;
+  border-radius: 14px;
+  border: none;
+  font-weight: 800;
+}
+
+/* COMPLETE */
+#completeView {
+  max-width: 720px;
+  margin: auto;
+  padding: 1rem;
+}
+
+.complete-card {
+  background: var(--card);
+  padding: 1.5rem;
+  border-radius: 18px;
+  text-align: center;
+}
+
+.complete-title {
+  font-size: 1.6rem;
+  font-weight: 1000;
+  margin-bottom: 1rem;
+}
+
+/* PACK MODE */
+#packModeView {
+  max-width: 720px;
+  margin: auto;
+  padding: 1rem;
 }
