@@ -7,66 +7,77 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header>
-    <div class="header-inner">
-      <h1>Designated Warehouse</h1>
-      <button id="togglePacksBtn" class="nav-btn pack-btn">Open Pack Picker</button>
-    </div>
-  </header>
 
-  <!-- DASHBOARD -->
-  <section id="dashboard">
+<header>
+  <div class="header-inner">
+    <h1>Designated Warehouse</h1>
+    <button id="goPackModeBtn" class="nav-btn">Pack Mode</button>
+  </div>
+</header>
+
+<!-- SCREEN 1: START PICK -->
+<section id="startView">
+  <div class="dash">
     <div class="dash-item">
       <div class="dash-value" id="dash-pending">0</div>
-      <div class="dash-label">Pending Orders</div>
+      <div class="dash-label">Orders</div>
     </div>
     <div class="dash-item">
-      <div class="dash-value" id="dash-boxes">0</div>
-      <div class="dash-label">Boxes Needed</div>
+      <div class="dash-value" id="dash-cans">0</div>
+      <div class="dash-label">Cans</div>
     </div>
-  </section>
+  </div>
 
-  <!-- ORDERS VIEW -->
-  <section id="ordersView">
-    <main>
-      <div class="order-container" id="order-container">
-        <div class="order-header">
-          <button id="prevBtn" class="nav-btn">←</button>
-          <div class="order-info">
-            <h2 id="orderId"></h2>
-            <div id="customerName" class="customer-name"></div>
-            <div id="customerAddress" class="customer-address"></div>
-          </div>
-          <button id="nextBtn" class="nav-btn">→</button>
-        </div>
+  <button id="startPickingBtn" class="primary-btn">START PICKING</button>
+</section>
 
-        <div class="boxes-info" id="boxesInfo">
-          <!-- Boxes and cans summary -->
-        </div>
+<!-- SCREEN 2: PICK ITEM -->
+<section id="pickView" class="hidden">
+  <div class="pick-location" id="pickLocation"></div>
 
-        <div class="items-list" id="itemsContainer">
-          <!-- Product lines -->
-        </div>
-      </div>
-    </main>
-  </section>
+  <div class="pick-card">
+    <img id="pickImage" />
+    <div class="pick-name" id="pickName"></div>
+    <div class="pick-qty" id="pickQty"></div>
 
-  <!-- PACK PICKER VIEW -->
-  <section id="packsView" class="hidden">
-    <header>
-      <h1>Pack Picker</h1>
-      <button id="backToOrdersBtn" class="nav-btn">← Back</button>
-    </header>
+    <button id="confirmPickBtn" class="primary-btn">✅ CONFIRM PICK</button>
+    <button id="issueBtn" class="secondary-btn">Issue</button>
+  </div>
 
-    <div class="filter-container">
-      <label for="packDropdown">Select Variety Pack:</label>
-      <select id="packDropdown">
-        <option value="All">All</option>
-      </select>
+  <!-- Issue Modal -->
+  <div id="issueModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>Issue</h2>
+      <button class="modal-option" data-issue="short">Short Stock</button>
+      <button class="modal-option" data-issue="damaged">Damaged</button>
+      <button class="modal-option" data-issue="missing">Missing</button>
+      <button class="modal-option" data-issue="other">Other</button>
+      <button id="closeIssueModalBtn" class="nav-btn">Close</button>
     </div>
-    <div id="results">Loading packs…</div>
-  </section>
+  </div>
+</section>
 
-  <script src="script.js"></script>
+<!-- SCREEN 3: COMPLETE -->
+<section id="completeView" class="hidden">
+  <div class="complete-card">
+    <div class="complete-title">✅ PICK COMPLETE</div>
+    <div class="complete-stat">Items: <span id="pickedCount">0</span></div>
+    <div class="complete-stat">Issues: <span id="issueCount">0</span></div>
+
+    <button id="goToPackBtn" class="primary-btn">GO TO PACK MODE</button>
+  </div>
+</section>
+
+<!-- PACK MODE -->
+<section id="packModeView" class="hidden">
+  <div class="pack-header">
+    <h2>Pack Mode</h2>
+    <button id="backToStartBtn" class="nav-btn">← Back</button>
+  </div>
+
+  <div id="packOrders"></div>
+</section>
+
+<script src="script.js"></script>
 </body>
 </html>
