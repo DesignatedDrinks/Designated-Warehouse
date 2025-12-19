@@ -310,3 +310,12 @@ header {
 }
 
 .pack-item img { width: 54px; height: 54px; object-fit: contain; border-radius: 10px; background:#fafafa; }
+
+/* =========================================
+   FORCE MODAL TO ACTUALLY HIDE
+   ========================================= */
+
+.modal.hidden {
+  display: none !important;
+}
+
