@@ -8,66 +8,64 @@ const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
-// Image lookup (title -> url) — from the same spreadsheet
+// ImageLookup sheet (A=itemTitle, B=imageUrl)
 const imageLookupUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('ImageLookup!A2:B')}?alt=json&key=${apiKey}`;
 
-// Pack picker sheet (3 cols: Pack, Beer, ImageUrl)
+// Pack picker sheet
 const packsSheetId    = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
 const packTitlesUrl   = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Pack Titles!A2:A')}?key=${apiKey}`;
 const varietyPacksUrl = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Variety Packs!A2:C1000')}?key=${apiKey}`;
 
 // ———————————————————————————————————————————————
-// DOM (NULL SAFE)
+// DOM
 // ———————————————————————————————————————————————
-const $ = (id) => document.getElementById(id);
-
 const el = {
   // nav
-  goStartBtn: $('goStartBtn'),
-  goPackModeBtn: $('goPackModeBtn'),
+  goStartBtn: document.getElementById('goStartBtn'),
+  goPackModeBtn: document.getElementById('goPackModeBtn'),
 
   // views
-  startView: $('startView'),
-  pickView: $('pickView'),
-  completeView: $('completeView'),
-  packModeView: $('packModeView'),
+  startView: document.getElementById('startView'),
+  pickView: document.getElementById('pickView'),
+  completeView: document.getElementById('completeView'),
+  packModeView: document.getElementById('packModeView'),
 
   // start
-  dashPending: $('dash-pending'),
-  dashCans: $('dash-cans'),
-  startPickingBtn: $('startPickingBtn'),
-  startError: $('startError'),
+  dashPending: document.getElementById('dash-pending'),
+  dashCans: document.getElementById('dash-cans'),
+  startPickingBtn: document.getElementById('startPickingBtn'),
+  startError: document.getElementById('startError'),
 
   // pick
-  pickLocation: $('pickLocation'),
-  pickProgress: $('pickProgress'),
-  pickImage: $('pickImage'),
-  pickName: $('pickName'),
-  pickQty: $('pickQty'),
-  confirmPickBtn: $('confirmPickBtn'),
-  issueBtn: $('issueBtn'),
-  issueModal: $('issueModal'),
-  closeIssueModalBtn: $('closeIssueModalBtn'),
+  pickLocation: document.getElementById('pickLocation'),
+  pickProgress: document.getElementById('pickProgress'),
+  pickImage: document.getElementById('pickImage'),
+  pickName: document.getElementById('pickName'),
+  pickQty: document.getElementById('pickQty'),
+  confirmPickBtn: document.getElementById('confirmPickBtn'),
+  issueBtn: document.getElementById('issueBtn'),
+  issueModal: document.getElementById('issueModal'),
+  closeIssueModalBtn: document.getElementById('closeIssueModalBtn'),
 
   // complete
-  pickedCount: $('pickedCount'),
-  issueCount: $('issueCount'),
-  goToPackBtn: $('goToPackBtn'),
+  pickedCount: document.getElementById('pickedCount'),
+  issueCount: document.getElementById('issueCount'),
+  goToPackBtn: document.getElementById('goToPackBtn'),
 
   // pack mode
-  backToStartBtn: $('backToStartBtn'),
-  packPrevBtn: $('packPrevBtn'),
-  packNextBtn: $('packNextBtn'),
-  packOrderId: $('packOrderId'),
-  packCustomerName: $('packCustomerName'),
-  packCustomerAddress: $('packCustomerAddress'),
-  packBoxesInfo: $('packBoxesInfo'),
-  packItemsContainer: $('packItemsContainer'),
-  openPackPickerBtn: $('openPackPickerBtn'),
-  packPickerPanel: $('packPickerPanel'),
-  packDropdown: $('packDropdown'),
-  results: $('results'),
+  backToStartBtn: document.getElementById('backToStartBtn'),
+  packPrevBtn: document.getElementById('packPrevBtn'),
+  packNextBtn: document.getElementById('packNextBtn'),
+  packOrderId: document.getElementById('packOrderId'),
+  packCustomerName: document.getElementById('packCustomerName'),
+  packCustomerAddress: document.getElementById('packCustomerAddress'),
+  packBoxesInfo: document.getElementById('packBoxesInfo'),
+  packItemsContainer: document.getElementById('packItemsContainer'),
+  openPackPickerBtn: document.getElementById('openPackPickerBtn'),
+  packPickerPanel: document.getElementById('packPickerPanel'),
+  packDropdown: document.getElementById('packDropdown'),
+  results: document.getElementById('results'),
 };
 
 // ———————————————————————————————————————————————
@@ -81,18 +79,21 @@ let pickIndex = 0;
 let isPicking = false;
 let issues = [];
 
+// Variety pack helper data
 let varietyPacksData = [];
 let packsLoaded = false;
 
-let imageMap = new Map();  // itemTitle(normalized) -> imageUrl
+// Image lookup map
+let imageLookupMap = new Map(); // normalized title -> url
+let imageLookupLoaded = false;
 
 // ———————————————————————————————————————————————
 // VIEW CONTROL
 // ———————————————————————————————————————————————
 function showView(which) {
-  const all = [el.startView, el.pickView, el.completeView, el.packModeView].filter(Boolean);
-  all.forEach(v => v.classList.add('hidden'));
-  if (which) which.classList.remove('hidden');
+  [el.startView, el.pickView, el.completeView, el.packModeView]
+    .forEach(v => v && v.classList.add('hidden'));
+  which && which.classList.remove('hidden');
 }
 
 // ———————————————————————————————————————————————
@@ -109,19 +110,22 @@ function placeholderImage(imgEl) {
 }
 
 function normalizeKey(s) {
-  return String(s || '').trim().toLowerCase();
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/â€œ|â€/g, '"')
+    .replace(/â€™/g, "'")
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ');
 }
 
-function isLikelyUrl(s) {
-  const t = String(s || '').trim();
-  return /^https?:\/\//i.test(t) || /^\/\/cdn\./i.test(t) || /cdn\.shopify\.com/i.test(t);
-}
-
-function cleanUrlMaybe(s) {
-  const t = String(s || '').trim();
-  if (!t) return '';
-  if (t.startsWith('//')) return 'https:' + t;
-  return t;
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 // Placeholder until you provide a real mapping sheet
@@ -132,101 +136,121 @@ function guessLocation(title) {
   return { label: `AISLE ${aisle}`, sortKey: `A${aisle}` };
 }
 
-// Null-safe event binder so your app never dies on a missing ID
-function on(elm, event, handler) {
-  if (!elm) return;
-  elm.addEventListener(event, handler);
+// ———————————————————————————————————————————————
+// IMAGE HELPERS (IMPORTANT)
+// ———————————————————————————————————————————————
+function extractUrlFromImageFormula(cell) {
+  const s = String(cell || '').trim();
+  if (!s) return '';
+  const m = s.match(/=IMAGE\(\s*"(https?:\/\/[^"]+)"\s*/i);
+  return m ? m[1] : '';
 }
 
-// ———————————————————————————————————————————————
-// IMAGE LOOKUP LOAD
-// ———————————————————————————————————————————————
-async function loadImageLookup() {
+async function loadImageLookupOnce() {
+  if (imageLookupLoaded) return;
+  imageLookupLoaded = true;
+
   try {
     const res = await fetch(imageLookupUrl);
     const json = await res.json();
     const rows = json.values || [];
 
-    imageMap = new Map(
-      rows
-        .filter(r => r && r[0] && r[1])
-        .map(r => [normalizeKey(r[0]), cleanUrlMaybe(r[1])])
-    );
+    for (const r of rows) {
+      const title = (r[0] || '').trim();
+      const url   = (r[1] || '').trim();
+      if (!title || !url) continue;
+      imageLookupMap.set(normalizeKey(title), url);
+    }
   } catch (e) {
-    console.warn('ImageLookup failed to load (continuing without it).', e);
-    imageMap = new Map();
+    console.error('ImageLookup load failed', e);
+    // Keep going — you’ll just see more placeholders.
   }
 }
 
-function getImageForTitle(itemTitle, fallbackFromOrdersSheet) {
-  // 1) if the Orders sheet already has a usable URL, use it
-  if (isLikelyUrl(fallbackFromOrdersSheet)) return cleanUrlMaybe(fallbackFromOrdersSheet);
+function resolveImageUrl(itemTitle, sheetCellValue) {
+  // 1) If Orders sheet cell is =IMAGE("..."), extract URL
+  const fromFormula = extractUrlFromImageFormula(sheetCellValue);
+  if (fromFormula) return fromFormula;
 
-  // 2) else try ImageLookup map by exact normalized title
-  const key = normalizeKey(itemTitle);
-  return imageMap.get(key) || '';
+  // 2) If Orders sheet cell is already a URL, use it
+  const direct = String(sheetCellValue || '').trim();
+  if (direct.startsWith('http')) return direct;
+
+  // 3) Fallback to ImageLookup (by title)
+  const lookup = imageLookupMap.get(normalizeKey(itemTitle));
+  return lookup || '';
 }
 
 // ———————————————————————————————————————————————
-// DATA: LOAD + PARSE ORDERS (HEADER-AWARE + FALLBACKS)
+// DATA: LOAD + PARSE ORDERS (HEADER-AWARE)
 // ———————————————————————————————————————————————
+function buildHeaderIndex(headerRow) {
+  const idx = {};
+  (headerRow || []).forEach((h, i) => {
+    const k = normalizeKey(h);
+    if (k) idx[k] = i;
+  });
+
+  // Common aliases -> canonical
+  const pick = (...keys) => keys.find(k => idx[k] !== undefined) ?? null;
+
+  return {
+    orderId:        pick('orderid', 'order id', 'order'),
+    customerName:   pick('customername', 'customer name', 'customer'),
+    address:        pick('address', 'shipping address'),
+    itemTitle:      pick('itemtitle', 'item title', 'title', 'product'),
+    variantTitle:   pick('varianttitle', 'variant title', 'variant'),
+    qty:            pick('qty', 'quantity'),
+    picked:         pick('picked'),
+    notes:          pick('notes', 'note'),
+    imageUrl:       pick('imageurl', 'image url', 'image', 'img'),
+  };
+}
+
 async function loadOrders() {
   try {
-    // load image map first (so we can enrich items)
-    await loadImageLookup();
+    await loadImageLookupOnce();
 
     const res = await fetch(ordersUrl);
     const json = await res.json();
     const rows = json.values || [];
     if (rows.length < 2) throw new Error('No orders found');
 
-    // Header-aware mapping (works even if columns move)
-    const header = rows[0].map(h => normalizeKey(h));
-    const idx = (name) => header.indexOf(normalizeKey(name));
+    const header = rows[0] || [];
+    const col = buildHeaderIndex(header);
 
-    const iOrderId       = idx('orderid');
-    const iCustomerName  = idx('customername');
-    const iAddress       = idx('address');
-    const iItemTitle     = idx('itemtitle');
-    const iVariantTitle  = idx('varianttitle');
-    const iQty           = idx('qty');
-    const iNotes         = idx('notes');
-    const iImageUrlA     = idx('imageurl');
-    const iImageUrlB     = idx('image');      // some people name it "image"
+    // If no recognizable header row, fallback to “old layout”
+    const hasHeader = Object.values(col).some(v => v !== null);
 
     const grouped = {};
 
     for (const r of rows.slice(1)) {
-      // Fallback extraction if headers aren't present / sheet is “weird”
-      const orderId = (iOrderId >= 0 ? r[iOrderId] : r[0]) || '';
-      const itemTitle = (iItemTitle >= 0 ? r[iItemTitle] : r[3] || r[1]) || '';
-      const variantTitle = (iVariantTitle >= 0 ? r[iVariantTitle] : r[4]) || '';
-      const qtyRaw = (iQty >= 0 ? r[iQty] : r[5] || r[2]) || 0;
+      // FALLBACKS:
+      // If sheet has headers, use them.
+      // If not, assume: [orderId, customerName, address, itemTitle, variantTitle, qty, picked, notes, imageUrl]
+      const orderId       = hasHeader ? r[col.orderId ?? 0]      : r[0];
+      const customerName  = hasHeader ? r[col.customerName ?? 1] : r[1];
+      const address       = hasHeader ? r[col.address ?? 2]      : r[2];
+      const itemTitle     = hasHeader ? r[col.itemTitle ?? 3]    : r[3];
+      const variantTitle  = hasHeader ? r[col.variantTitle ?? 4] : r[4];
+      const qtyStr        = hasHeader ? r[col.qty ?? 5]          : r[5];
+      const notes         = hasHeader ? r[col.notes ?? 7]        : r[7];
+      const imageCell     = hasHeader ? r[col.imageUrl ?? 8]     : r[8];
 
-      // If your sheet is 3 cols and column C is the image URL, we detect it:
-      // Example possible layouts:
-      //   [orderId, itemTitle, imageUrl] OR [itemTitle, qty, imageUrl] OR [orderId, itemTitle, qty]
-      let imageFromSheet = '';
-      if (iImageUrlA >= 0) imageFromSheet = r[iImageUrlA] || '';
-      else if (iImageUrlB >= 0) imageFromSheet = r[iImageUrlB] || '';
-      else if (r.length === 3 && isLikelyUrl(r[2])) imageFromSheet = r[2] || '';
-      else if (r.length >= 9 && isLikelyUrl(r[8])) imageFromSheet = r[8] || '';
+      const oid = String(orderId || '').trim();
+      if (!oid) continue;
 
-      // qty parsing
-      const qty = parseInt(qtyRaw, 10) || 0;
+      const qty = parseInt(qtyStr, 10) || 0;
 
-      // pack size -> cans
+      // If variant says “12 pack” etc, multiply.
+      // If variant is blank, treat qty as cans.
       const packSizeMatch = String(variantTitle || '').match(/(\d+)\s*pack/i);
       const packSize = packSizeMatch ? parseInt(packSizeMatch[1], 10) : 1;
       const cans = qty * (packSize || 1);
 
-      const customerName = (iCustomerName >= 0 ? r[iCustomerName] : r[1]) || '';
-      const address = (iAddress >= 0 ? r[iAddress] : r[2]) || '';
-      const notes = (iNotes >= 0 ? r[iNotes] : r[7]) || '';
-
-      if (!grouped[orderId]) {
-        grouped[orderId] = {
-          orderId,
+      if (!grouped[oid]) {
+        grouped[oid] = {
+          orderId: oid,
           customerName: customerName || '',
           address: address || '',
           notes: notes || '',
@@ -235,15 +259,14 @@ async function loadOrders() {
         };
       }
 
-      const resolvedImageUrl = getImageForTitle(itemTitle, imageFromSheet);
-
-      grouped[orderId].items.push({
-        itemTitle: itemTitle || '',
+      const title = itemTitle || '';
+      grouped[oid].items.push({
+        itemTitle: title,
         cans,
-        imageUrl: resolvedImageUrl
+        imageUrl: resolveImageUrl(title, imageCell || '')
       });
 
-      grouped[orderId].totalCans += cans;
+      grouped[oid].totalCans += cans;
     }
 
     // stable, predictable sort for pack mode
@@ -253,6 +276,7 @@ async function loadOrders() {
     orders = parsedOrders;
     packIndex = 0;
 
+    // build pick queue AFTER orders are built (and images resolved)
     pickQueue = buildPickQueue(orders);
     pickIndex = 0;
     isPicking = false;
@@ -276,13 +300,11 @@ function buildPickQueue(orderList) {
       const existing = map.get(key);
       if (existing) {
         existing.cans += it.cans;
-        // Keep first non-empty imageUrl
-        if (!existing.imageUrl && it.imageUrl) existing.imageUrl = it.imageUrl;
       } else {
         map.set(key, {
           itemTitle: it.itemTitle,
           cans: it.cans,
-          imageUrl: it.imageUrl || '',
+          imageUrl: it.imageUrl || resolveImageUrl(it.itemTitle, ''),
           location: guessLocation(it.itemTitle)
         });
       }
@@ -305,7 +327,7 @@ function buildPickQueue(orderList) {
 // ———————————————————————————————————————————————
 function renderStart() {
   showView(el.startView);
-  if (el.startError) el.startError.classList.add('hidden');
+  el.startError && el.startError.classList.add('hidden');
 
   setText(el.dashPending, orders.length);
   const totalCans = pickQueue.reduce((sum, it) => sum + (it.cans || 0), 0);
@@ -368,13 +390,11 @@ function confirmPick() {
 }
 
 function openIssueModal() {
-  if (!el.issueModal) return;
-  el.issueModal.classList.remove('hidden');
+  el.issueModal && el.issueModal.classList.remove('hidden');
 }
 
 function closeIssueModal() {
-  if (!el.issueModal) return;
-  el.issueModal.classList.add('hidden');
+  el.issueModal && el.issueModal.classList.add('hidden');
 }
 
 function logIssue(type) {
@@ -476,8 +496,12 @@ function renderPackOrder() {
 
     const img = document.createElement('img');
     img.alt = it.itemTitle;
+
+    // IMPORTANT: always ensure we have a real URL for pack mode too
+    const resolved = it.imageUrl || resolveImageUrl(it.itemTitle, '');
+
     img.onerror = () => { img.src = 'https://via.placeholder.com/60'; };
-    img.src = it.imageUrl || 'https://via.placeholder.com/60';
+    img.src = resolved || 'https://via.placeholder.com/60';
 
     const details = document.createElement('div');
     details.className = 'details';
@@ -499,17 +523,8 @@ function renderPackOrder() {
   el.packItemsContainer.appendChild(frag);
 }
 
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
 // ———————————————————————————————————————————————
-// PACK PICKER (LAZY-LOAD) — Variety Packs (3 cols A-C)
+// PACK PICKER (LAZY-LOAD)
 // ———————————————————————————————————————————————
 async function loadPacksOnce() {
   if (packsLoaded) return;
@@ -524,6 +539,7 @@ async function loadPacksOnce() {
     const titles = (tR.values || []).map(r => r[0]).filter(Boolean);
     varietyPacksData = vR.values || [];
 
+    // reset dropdown
     if (el.packDropdown) {
       el.packDropdown.innerHTML = `<option value="All">All</option>`;
       for (const t of titles) el.packDropdown.add(new Option(t, t));
@@ -557,7 +573,10 @@ function displayPacks(filter) {
     const img = document.createElement('img');
     img.alt = beer || '';
     img.onerror = () => { img.src = 'https://via.placeholder.com/50'; };
-    img.src = cleanUrlMaybe(imgUrl) || 'https://via.placeholder.com/50';
+
+    // If variety pack sheet image is missing, try ImageLookup by beer title
+    const resolved = (imgUrl && String(imgUrl).trim()) || resolveImageUrl(beer || '', '');
+    img.src = resolved || 'https://via.placeholder.com/50';
 
     const wrap = document.createElement('div');
     const h3 = document.createElement('h3');
@@ -574,32 +593,32 @@ function displayPacks(filter) {
 }
 
 // ———————————————————————————————————————————————
-// EVENTS (wired once) — NULL SAFE
+// EVENTS (wired once)
 // ———————————————————————————————————————————————
-on(el.startPickingBtn, 'click', startPicking);
-on(el.confirmPickBtn, 'click', confirmPick);
+if (el.startPickingBtn) el.startPickingBtn.addEventListener('click', startPicking);
+if (el.confirmPickBtn) el.confirmPickBtn.addEventListener('click', confirmPick);
 
-on(el.issueBtn, 'click', openIssueModal);
-on(el.closeIssueModalBtn, 'click', closeIssueModal);
+if (el.issueBtn) el.issueBtn.addEventListener('click', openIssueModal);
+if (el.closeIssueModalBtn) el.closeIssueModalBtn.addEventListener('click', closeIssueModal);
 
 document.querySelectorAll('.modal-option').forEach(btn => {
   btn.addEventListener('click', () => logIssue(btn.getAttribute('data-issue') || 'other'));
 });
 
-on(el.goToPackBtn, 'click', goPackMode);
-on(el.goPackModeBtn, 'click', goPackMode);
+if (el.goToPackBtn) el.goToPackBtn.addEventListener('click', goPackMode);
+if (el.goPackModeBtn) el.goPackModeBtn.addEventListener('click', goPackMode);
 
-on(el.goStartBtn, 'click', () => showView(el.startView));
-on(el.backToStartBtn, 'click', () => showView(el.startView));
+if (el.goStartBtn) el.goStartBtn.addEventListener('click', () => showView(el.startView));
+if (el.backToStartBtn) el.backToStartBtn.addEventListener('click', () => showView(el.startView));
 
-on(el.packPrevBtn, 'click', () => {
+if (el.packPrevBtn) el.packPrevBtn.addEventListener('click', () => {
   if (packIndex > 0) { packIndex--; renderPackOrder(); }
 });
-on(el.packNextBtn, 'click', () => {
+if (el.packNextBtn) el.packNextBtn.addEventListener('click', () => {
   if (packIndex < orders.length - 1) { packIndex++; renderPackOrder(); }
 });
 
-on(el.openPackPickerBtn, 'click', async () => {
+if (el.openPackPickerBtn) el.openPackPickerBtn.addEventListener('click', async () => {
   if (!el.packPickerPanel) return;
   el.packPickerPanel.classList.toggle('hidden');
 
@@ -609,7 +628,7 @@ on(el.openPackPickerBtn, 'click', async () => {
   }
 });
 
-on(el.packDropdown, 'change', (e) => displayPacks(e.target.value));
+if (el.packDropdown) el.packDropdown.addEventListener('change', (e) => displayPacks(e.target.value));
 
 // ———————————————————————————————————————————————
 // INIT
