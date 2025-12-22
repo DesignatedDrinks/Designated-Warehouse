@@ -87,9 +87,7 @@ let varietyPacksData = [];
 let packsLoaded = false;
 
 let imageMap = new Map();  // itemTitle(normalized) -> imageUrl
-
-// NEW: pack title -> component beers
-let packMap = new Map();   // packTitle(normalized) -> [{ beerTitle, imageUrl }]
+let packMap  = new Map();  // packTitle(normalized) -> [{ beerTitle, imageUrl }]
 
 // ———————————————————————————————————————————————
 // VIEW CONTROL
@@ -129,68 +127,131 @@ function cleanUrlMaybe(s) {
   return t;
 }
 
-// Null-safe event binder so your app never dies on a missing ID
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+// Null-safe event binder
 function on(elm, event, handler) {
   if (!elm) return;
   elm.addEventListener(event, handler);
 }
 
 // ———————————————————————————————————————————————
-// LOCATION (YOUR REAL PICK LOOP) — LETTER-ONLY
-// Center Island LEFT → Right Wall → Center Island RIGHT
+// LOCATION LOGIC (2 AISLES)
+// Aisle 1 = you can pick BOTH SIDES (Wall + Island Right Face) while walking
+// Aisle 2 = you pick ONE SIDE (Island Left Face)
+// Skid number ignored. First letter drives location.
 // ———————————————————————————————————————————————
 function guessLocation(title) {
-  const t = String(title || '').trim();
-  const letter = (t[0] || '?').toUpperCase();
+  const raw = String(title || '').trim();
+  const letter = (raw[0] || '?').toUpperCase();
+  const lower = raw.toLowerCase();
 
-  // If the same letter exists in multiple physical locations (ex: C),
-  // you MUST override by matching a substring of the title.
-  // Add rules ONLY when needed.
-  const TITLE_SEGMENT_OVERRIDES = [
-    // Example:
-    // { contains: 'Chilly Ones', segment: 'WALL' },
-    // { contains: 'Collective Arts', segment: 'ISLAND_RIGHT' },
+  // Only use overrides when a letter exists in multiple places (C/T/etc)
+  // side values: 'WALL' | 'ISLAND_RIGHT' | 'ISLAND_LEFT'
+  const OVERRIDES = [
+    // Examples — edit as needed:
+    // { contains: 'collective arts', side: 'WALL' },
+    // { contains: 'chilly ones', side: 'ISLAND_RIGHT' },
+    // { contains: 'templ', side: 'ISLAND_LEFT' },
   ];
 
-  const lower = t.toLowerCase();
-  let forcedSegment = null;
-  for (const rule of TITLE_SEGMENT_OVERRIDES) {
-    if (lower.includes(String(rule.contains).toLowerCase())) {
-      forcedSegment = rule.segment;
+  let forcedSide = null;
+  for (const r of OVERRIDES) {
+    if (lower.includes(String(r.contains).toLowerCase())) {
+      forcedSide = r.side;
       break;
     }
   }
 
-  // Segment 1: Center Island LEFT (from packing table upward)
-  const LEFT = ['W','T','S','R','P','H']; // Templ=T, Harmons=H
+  // AISLE 1 BAYS (front/top → back/bottom)
+  // Each bay is what you can reach from Aisle 1 (Wall + Island Right Face).
+  const AISLE1_BAYS = [
+    { WALL: 'B', ISLAND_RIGHT: 'O' },
+    { WALL: 'B', ISLAND_RIGHT: 'N' },
+    { WALL: 'B', ISLAND_RIGHT: 'M' },
+    { WALL: 'B', ISLAND_RIGHT: 'L' },
+    { WALL: 'D', ISLAND_RIGHT: 'T' },
+    { WALL: 'C', ISLAND_RIGHT: 'H' },
+    { WALL: 'C', ISLAND_RIGHT: 'G' },
+    { WALL: 'C', ISLAND_RIGHT: 'C' },
+  ];
 
-  // Segment 2: Right Wall (top→bottom path)
-  const WALL = ['B','D','C'];
+  // AISLE 2 BAYS (front/top → back/bottom) — one side only
+  const AISLE2_BAYS = ['P','R','S','T','W','C'];
 
-  // Segment 3: Center Island RIGHT (from bottom upward)
-  const RIGHT = ['C','G','H','I','L','M','N','O'];
-
-  const seg =
-    forcedSegment ||
-    (LEFT.includes(letter) ? 'ISLAND_LEFT' :
-     WALL.includes(letter) ? 'WALL' :
-     RIGHT.includes(letter) ? 'ISLAND_RIGHT' :
-     'UNKNOWN');
-
-  const rankIn = (arr) => {
-    const idx = arr.indexOf(letter);
-    return idx === -1 ? 999 : idx + 1;
+  const findHitsA1 = (L, side) => {
+    const hits = [];
+    for (let i = 0; i < AISLE1_BAYS.length; i++) {
+      if (AISLE1_BAYS[i][side] === L) hits.push(i + 1);
+    }
+    return hits;
   };
 
-  let segRank = 9;
-  let inRank  = 999;
+  const findBayA2 = (L) => {
+    const i = AISLE2_BAYS.indexOf(L);
+    return i === -1 ? null : i + 1;
+  };
 
-  if (seg === 'ISLAND_LEFT')  { segRank = 1; inRank = rankIn(LEFT); }
-  if (seg === 'WALL')         { segRank = 2; inRank = rankIn(WALL); }
-  if (seg === 'ISLAND_RIGHT') { segRank = 3; inRank = rankIn(RIGHT); }
+  const a1WallHits  = findHitsA1(letter, 'WALL');
+  const a1RightHits = findHitsA1(letter, 'ISLAND_RIGHT');
+  const a2Bay       = findBayA2(letter);
 
-  const sortKey = `${String(segRank).padStart(2,'0')}-${String(inRank).padStart(3,'0')}-${letter}`;
-  return { label: `${seg.replace('_',' ')} – ${letter}`, sortKey };
+  let aisle = 9;
+  let side  = 'UNKNOWN';
+  let bay   = 999;
+
+  // Forced
+  if (forcedSide === 'WALL' || forcedSide === 'ISLAND_RIGHT') {
+    aisle = 1;
+    side = forcedSide;
+    const hits = forcedSide === 'WALL' ? a1WallHits : a1RightHits;
+    bay = hits.length ? hits[0] : 999;
+  } else if (forcedSide === 'ISLAND_LEFT') {
+    aisle = 2;
+    side = 'ISLAND_LEFT';
+    bay = a2Bay ?? 999;
+  } else {
+    // Auto-detect
+    if (a1WallHits.length || a1RightHits.length) {
+      aisle = 1;
+
+      // If ambiguous (ex: C appears on both), default to WALL.
+      // Use OVERRIDES to force correct side for specific brands.
+      if (a1WallHits.length && !a1RightHits.length) side = 'WALL';
+      else if (!a1WallHits.length && a1RightHits.length) side = 'ISLAND_RIGHT';
+      else side = 'WALL';
+
+      const hits = side === 'WALL' ? a1WallHits : a1RightHits;
+      bay = hits.length ? hits[0] : 999;
+    } else if (a2Bay != null) {
+      aisle = 2;
+      side = 'ISLAND_LEFT';
+      bay = a2Bay;
+    }
+  }
+
+  // Within same bay: wall then island-right
+  const sideRank =
+    side === 'WALL' ? 1 :
+    side === 'ISLAND_RIGHT' ? 2 :
+    side === 'ISLAND_LEFT' ? 1 :
+    9;
+
+  const sortKey = `${String(aisle).padStart(2,'0')}-${String(bay).padStart(3,'0')}-${String(sideRank).padStart(2,'0')}-${letter}`;
+
+  const label =
+    aisle === 1 ? `AISLE 1 – BAY ${bay} – ${side.replace('_',' ')} – ${letter}` :
+    aisle === 2 ? `AISLE 2 – BAY ${bay} – ISLAND LEFT – ${letter}` :
+    `UNKNOWN – ${letter}`;
+
+  return { label, sortKey, aisle, bay, side, letter };
 }
 
 // ———————————————————————————————————————————————
@@ -224,13 +285,11 @@ function getImageForTitle(itemTitle, fallbackFromOrdersSheet) {
 }
 
 // ———————————————————————————————————————————————
-// VARIETY PACK MAP (Pack -> Beer rows)  ✅ now prints real Google errors
+// VARIETY PACK MAP (prints real Google errors)
 // ———————————————————————————————————————————————
 async function loadVarietyPackMap() {
   try {
     const res = await fetch(varietyPacksUrl);
-
-    // If Google returns 400/403/etc, read the body and throw a useful error
     if (!res.ok) {
       const body = await res.text();
       throw new Error(`VarietyPacks fetch failed ${res.status}: ${body}`);
@@ -240,7 +299,6 @@ async function loadVarietyPackMap() {
     const rows = json.values || [];
 
     const m = new Map();
-
     for (const r of rows) {
       const packTitle = String(r?.[0] || '').trim();
       const beerTitle = String(r?.[1] || '').trim();
@@ -262,13 +320,12 @@ async function loadVarietyPackMap() {
 }
 
 // ———————————————————————————————————————————————
-// DATA: LOAD + PARSE ORDERS (HEADER-AWARE + FALLBACKS)
+// LOAD + PARSE ORDERS
 // ———————————————————————————————————————————————
 async function loadOrders() {
   try {
-    // Load enrichers first
     await loadImageLookup();
-    await loadVarietyPackMap(); // ✅ NEW
+    await loadVarietyPackMap();
 
     const res = await fetch(ordersUrl);
     if (!res.ok) {
@@ -277,10 +334,9 @@ async function loadOrders() {
     }
 
     const json = await res.json();
-    const rows = json.values || [];
+    const rows = json.values || say [];
     if (rows.length < 2) throw new Error('No orders found');
 
-    // Header-aware mapping (works even if columns move)
     const header = rows[0].map(h => normalizeKey(h));
     const idx = (name) => header.indexOf(normalizeKey(name));
 
@@ -292,7 +348,7 @@ async function loadOrders() {
     const iQty           = idx('qty');
     const iNotes         = idx('notes');
     const iImageUrlA     = idx('imageurl');
-    const iImageUrlB     = idx('image');      // some people name it "image"
+    const iImageUrlB     = idx('image');
 
     const grouped = {};
 
@@ -309,7 +365,6 @@ async function loadOrders() {
       else if (r.length >= 9 && isLikelyUrl(r[8])) imageFromSheet = r[8] || '';
 
       const qty = parseInt(qtyRaw, 10) || 0;
-
       const packSizeMatch = String(variantTitle || '').match(/(\d+)\s*pack/i);
       const packSize = packSizeMatch ? parseInt(packSizeMatch[1], 10) : 1;
       const cans = qty * (packSize || 1);
@@ -340,13 +395,10 @@ async function loadOrders() {
       grouped[orderId].totalCans += cans;
     }
 
-    const parsedOrders = Object.values(grouped);
-    parsedOrders.forEach(o => o.items.sort((a,b) => a.itemTitle.localeCompare(b.itemTitle)));
-
-    orders = parsedOrders;
+    orders = Object.values(grouped);
     packIndex = 0;
 
-    pickQueue = buildPickQueue(orders); // ✅ explodes packs + sorts by loop
+    pickQueue = buildPickQueue(orders);
     pickIndex = 0;
     isPicking = false;
     issues = [];
@@ -359,40 +411,37 @@ async function loadOrders() {
 }
 
 // ———————————————————————————————————————————————
-// PICK QUEUE: EXPLODE PACKS + MERGE + SORT BY YOUR LOOP
+// BUILD PICK QUEUE (global pick mode)
 // ———————————————————————————————————————————————
 function buildPickQueue(orderList) {
   const map = new Map();
 
   for (const o of orderList) {
-    for (const it of o.items) {
+    for (const it of (o.items || [])) {
       const rawTitle = String(it.itemTitle || '').trim();
       if (!rawTitle) continue;
 
-      // PACK EXPLOSION
+      // explode packs if title matches a pack
       const packKey = normalizeKey(rawTitle);
       const packItems = packMap.get(packKey);
 
       if (packItems && packItems.length) {
-        // IMPORTANT:
-        // This assumes your Variety Packs sheet lists EACH CAN as a row.
-        // If it lists each beer only once, you'll undercount (data issue).
+        // assumes Variety Packs sheet is one row per can
         for (const p of packItems) {
           const beerTitle = String(p.beerTitle || '').trim();
           if (!beerTitle) continue;
 
           const key = normalizeKey(beerTitle);
-          const addCans = 1;
-
           const existing = map.get(key);
+
           if (existing) {
-            existing.cans += addCans;
+            existing.cans += 1;
             if (!existing.imageUrl && p.imageUrl) existing.imageUrl = p.imageUrl;
           } else {
             const img = p.imageUrl || getImageForTitle(beerTitle, '');
             map.set(key, {
               itemTitle: beerTitle,
-              cans: addCans,
+              cans: 1,
               imageUrl: img || '',
               location: guessLocation(beerTitle)
             });
@@ -401,17 +450,17 @@ function buildPickQueue(orderList) {
         continue;
       }
 
-      // NORMAL ITEM
+      // normal item
       const key = normalizeKey(rawTitle);
       const existing = map.get(key);
 
       if (existing) {
-        existing.cans += it.cans;
+        existing.cans += (it.cans || 0);
         if (!existing.imageUrl && it.imageUrl) existing.imageUrl = it.imageUrl;
       } else {
         map.set(key, {
           itemTitle: rawTitle,
-          cans: it.cans,
+          cans: it.cans || 0,
           imageUrl: it.imageUrl || '',
           location: guessLocation(rawTitle)
         });
@@ -420,11 +469,9 @@ function buildPickQueue(orderList) {
   }
 
   const queue = Array.from(map.values());
-
-  // Sort by your real loop order
   queue.sort((a,b) => {
-    const la = a.location?.sortKey || '99-999-?';
-    const lb = b.location?.sortKey || '99-999-?';
+    const la = a.location?.sortKey || '99-999-99-?';
+    const lb = b.location?.sortKey || '99-999-99-?';
     if (la !== lb) return la.localeCompare(lb);
     return a.itemTitle.localeCompare(b.itemTitle);
   });
@@ -532,8 +579,76 @@ function renderComplete() {
 }
 
 // ———————————————————————————————————————————————
-// PACK MODE
+// PACK MODE (uses SAME pick logic, per-order)
 // ———————————————————————————————————————————————
+function buildOrderPickItems(order) {
+  const map = new Map();
+
+  for (const it of (order.items || [])) {
+    const rawTitle = String(it.itemTitle || '').trim();
+    if (!rawTitle) continue;
+
+    const packKey = normalizeKey(rawTitle);
+    const packItems = packMap.get(packKey);
+
+    if (packItems && packItems.length) {
+      const cansPerPack = packItems.length;
+      const packsOrdered = cansPerPack > 0 ? Math.max(1, Math.round((it.cans || 0) / cansPerPack)) : 1;
+
+      for (let p = 0; p < packsOrdered; p++) {
+        for (const row of packItems) {
+          const beerTitle = String(row.beerTitle || '').trim();
+          if (!beerTitle) continue;
+
+          const key = normalizeKey(beerTitle);
+          const existing = map.get(key);
+
+          if (existing) {
+            existing.cans += 1;
+            if (!existing.imageUrl && row.imageUrl) existing.imageUrl = row.imageUrl;
+          } else {
+            const img = row.imageUrl || getImageForTitle(beerTitle, '');
+            map.set(key, {
+              itemTitle: beerTitle,
+              cans: 1,
+              imageUrl: img || '',
+              location: guessLocation(beerTitle),
+              fromPack: rawTitle
+            });
+          }
+        }
+      }
+      continue;
+    }
+
+    const key = normalizeKey(rawTitle);
+    const existing = map.get(key);
+
+    if (existing) {
+      existing.cans += (it.cans || 0);
+      if (!existing.imageUrl && it.imageUrl) existing.imageUrl = it.imageUrl;
+    } else {
+      map.set(key, {
+        itemTitle: rawTitle,
+        cans: it.cans || 0,
+        imageUrl: it.imageUrl || '',
+        location: guessLocation(rawTitle),
+        fromPack: null
+      });
+    }
+  }
+
+  const items = Array.from(map.values());
+  items.sort((a,b) => {
+    const la = a.location?.sortKey || '99-999-99-?';
+    const lb = b.location?.sortKey || '99-999-99-?';
+    if (la !== lb) return la.localeCompare(lb);
+    return a.itemTitle.localeCompare(b.itemTitle);
+  });
+
+  return items;
+}
+
 function calculateBoxes(n) {
   if (n <= 6)  return { 24: 0, 12: 0, 6: 1 };
   if (n <= 12) return { 24: 0, 12: 1, 6: 0 };
@@ -596,11 +711,13 @@ function renderPackOrder() {
       (o.notes ? `<br><strong>Notes:</strong> ${escapeHtml(o.notes)}` : '');
   }
 
+  const pickSorted = buildOrderPickItems(o);
+
   if (!el.packItemsContainer) return;
   el.packItemsContainer.innerHTML = '';
   const frag = document.createDocumentFragment();
 
-  for (const it of o.items) {
+  for (const it of pickSorted) {
     const row = document.createElement('div');
     row.className = 'item';
 
@@ -613,7 +730,9 @@ function renderPackOrder() {
     details.className = 'details';
 
     const p1 = document.createElement('p');
-    p1.innerHTML = `<strong>${escapeHtml(it.itemTitle)}</strong>`;
+    const loc = it.location?.label ? ` <span style="opacity:.65">[${escapeHtml(it.location.label)}]</span>` : '';
+    const packNote = it.fromPack ? ` <span style="opacity:.65">(from ${escapeHtml(it.fromPack)})</span>` : '';
+    p1.innerHTML = `<strong>${escapeHtml(it.itemTitle)}</strong>${loc}${packNote}`;
 
     const p2 = document.createElement('p');
     p2.textContent = `${it.cans} cans`;
@@ -629,28 +748,15 @@ function renderPackOrder() {
   el.packItemsContainer.appendChild(frag);
 }
 
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
 // ———————————————————————————————————————————————
-// PACK PICKER (LAZY-LOAD)
+// PACK PICKER (LAZY LOAD)
 // ———————————————————————————————————————————————
 async function loadPacksOnce() {
   if (packsLoaded) return;
   packsLoaded = true;
 
   try {
-    const [tRes, vRes] = await Promise.all([
-      fetch(packTitlesUrl),
-      fetch(varietyPacksUrl)
-    ]);
-
+    const [tRes, vRes] = await Promise.all([fetch(packTitlesUrl), fetch(varietyPacksUrl)]);
     if (!tRes.ok) throw new Error(`PackTitles fetch failed ${tRes.status}: ${await tRes.text()}`);
     if (!vRes.ok) throw new Error(`VarietyPacks fetch failed ${vRes.status}: ${await vRes.text()}`);
 
@@ -710,7 +816,7 @@ function displayPacks(filter) {
 }
 
 // ———————————————————————————————————————————————
-// EVENTS (wired once) — NULL SAFE
+// EVENTS
 // ———————————————————————————————————————————————
 on(el.startPickingBtn, 'click', startPicking);
 on(el.confirmPickBtn, 'click', confirmPick);
