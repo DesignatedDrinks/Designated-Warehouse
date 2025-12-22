@@ -14,605 +14,342 @@ const imageLookupUrl =
 
 // Pack picker sheet (3 cols: Pack, Beer, ImageUrl)
 const packsSheetId    = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
-const packTitlesUrl   = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Pack Titles!A2:A')}?key=${apiKey}`;
-const varietyPacksUrl = `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('Variety Packs!A2:C1000')}?key=${apiKey}`;
+const varietyPacksUrl =
+  `https://sheets.googleapis.com/v4/spreadsheets/${packsSheetId}/values/${encodeURIComponent('VarietyPacks!A2:C')}?alt=json&key=${apiKey}`;
 
 // ———————————————————————————————————————————————
-// DOM (NULL SAFE)
+// PICK PATH (YOUR LOOP) — letter-only, derived from your map
+// Packing Table → Center Island LEFT face (bottom→top) → Right Wall (top→bottom)
+// → Center Island RIGHT face (bottom→top) → back to packing
 // ———————————————————————————————————————————————
-const $ = (id) => document.getElementById(id);
 
-const el = {
-  // nav
-  goStartBtn: $('goStartBtn'),
-  goPackModeBtn: $('goPackModeBtn'),
+// NOTE: If a letter appears multiple times on the wall (B, C), it shares the same rank.
+// If you later want finer control, we can add a “section” override for specific breweries.
+const PICK_LOOP = [
+  // Center Island — LEFT face (from packing table upward)
+  'W','T','S','R','P','T','H', // (T can represent “Templ”/your T slot; H=Harmons)
 
-  // views
-  startView: $('startView'),
-  pickView: $('pickView'),
-  completeView: $('completeView'),
-  packModeView: $('packModeView'),
+  // Right Wall (enter from top, walk down)
+  'B','D','C',
 
-  // start
-  dashPending: $('dash-pending'),
-  dashCans: $('dash-cans'),
-  startPickingBtn: $('startPickingBtn'),
-  startError: $('startError'),
+  // Center Island — RIGHT face (from bottom upward)
+  'C','G','H','I','L','M','N','O'
+];
 
-  // pick
-  pickLocation: $('pickLocation'),
-  pickProgress: $('pickProgress'),
-  pickImage: $('pickImage'),
-  pickName: $('pickName'),
-  pickQty: $('pickQty'),
-  confirmPickBtn: $('confirmPickBtn'),
-  issueBtn: $('issueBtn'),
-  issueModal: $('issueModal'),
-  closeIssueModalBtn: $('closeIssueModalBtn'),
+// Build rank map (first occurrence wins)
+const LETTER_RANK = (() => {
+  const m = new Map();
+  let rank = 1;
+  for (const ch of PICK_LOOP) {
+    if (!m.has(ch)) m.set(ch, rank++);
+  }
+  return m;
+})();
 
-  // complete
-  pickedCount: $('pickedCount'),
-  issueCount: $('issueCount'),
-  goToPackBtn: $('goToPackBtn'),
-
-  // pack mode
-  backToStartBtn: $('backToStartBtn'),
-  packPrevBtn: $('packPrevBtn'),
-  packNextBtn: $('packNextBtn'),
-  packOrderId: $('packOrderId'),
-  packCustomerName: $('packCustomerName'),
-  packCustomerAddress: $('packCustomerAddress'),
-  packBoxesInfo: $('packBoxesInfo'),
-  packItemsContainer: $('packItemsContainer'),
-  openPackPickerBtn: $('openPackPickerBtn'),
-  packPickerPanel: $('packPickerPanel'),
-  packDropdown: $('packDropdown'),
-  results: $('results'),
+// Optional: force specific breweries/titles to a letter if first-character isn’t what you want.
+// Example: { "Templ": "T", "Harmons": "H" } etc.
+// Keys can be substrings (case-insensitive).
+const LETTER_OVERRIDES = {
+  // 'Templ': 'T',
+  // 'Harmons': 'H',
 };
 
 // ———————————————————————————————————————————————
-// STATE
+// HELPERS
 // ———————————————————————————————————————————————
-let orders = [];           // order-centric for pack mode
-let packIndex = 0;
-
-let pickQueue = [];        // pick-centric for picker mode
-let pickIndex = 0;
-let isPicking = false;
-let issues = [];
-
-let varietyPacksData = [];
-let packsLoaded = false;
-
-let imageMap = new Map();  // itemTitle(normalized) -> imageUrl
-
-// ———————————————————————————————————————————————
-// VIEW CONTROL
-// ———————————————————————————————————————————————
-function showView(which) {
-  const all = [el.startView, el.pickView, el.completeView, el.packModeView].filter(Boolean);
-  all.forEach(v => v.classList.add('hidden'));
-  if (which) which.classList.remove('hidden');
+function norm(s) {
+  return String(s || '').trim();
 }
 
-// ———————————————————————————————————————————————
-// SAFE HELPERS
-// ———————————————————————————————————————————————
-function setText(node, value) {
-  if (!node) return;
-  node.textContent = value ?? '';
+function safeInt(x, fallback = 0) {
+  const n = parseInt(String(x || '').trim(), 10);
+  return Number.isFinite(n) ? n : fallback;
 }
 
-function placeholderImage(imgEl) {
-  if (!imgEl) return;
-  imgEl.src = 'https://via.placeholder.com/600x600?text=No+Image';
+function letterForTitle(title) {
+  const t = norm(title);
+  if (!t) return '?';
+
+  const lower = t.toLowerCase();
+  for (const [k, v] of Object.entries(LETTER_OVERRIDES)) {
+    if (lower.includes(k.toLowerCase())) return String(v).toUpperCase();
+  }
+
+  // Default rule: first letter of the brewery name (your titles start with brewery/vendor)
+  return t[0].toUpperCase();
 }
 
-function normalizeKey(s) {
-  return String(s || '').trim().toLowerCase();
+function rankForLetter(ch) {
+  return LETTER_RANK.get(ch) ?? 9999; // unknown letters go last
 }
 
-function isLikelyUrl(s) {
-  const t = String(s || '').trim();
-  return /^https?:\/\//i.test(t) || /^\/\/cdn\./i.test(t) || /cdn\.shopify\.com/i.test(t);
-}
-
-function cleanUrlMaybe(s) {
-  const t = String(s || '').trim();
-  if (!t) return '';
-  if (t.startsWith('//')) return 'https:' + t;
-  return t;
-}
-
-// Placeholder until you provide a real mapping sheet
-function guessLocation(title) {
-  const t = normalizeKey(title);
-  const c = t[0] || 'a';
-  const aisle = c < 'h' ? 1 : c < 'p' ? 2 : 3;
-  return { label: `AISLE ${aisle}`, sortKey: `A${aisle}` };
-}
-
-// Null-safe event binder so your app never dies on a missing ID
-function on(elm, event, handler) {
-  if (!elm) return;
-  elm.addEventListener(event, handler);
+function stableSortBy(arr, keyFn) {
+  return arr
+    .map((v, i) => ({ v, i, k: keyFn(v) }))
+    .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.i - b.i))
+    .map(o => o.v);
 }
 
 // ———————————————————————————————————————————————
-// IMAGE LOOKUP LOAD
+// DATA LOADERS
 // ———————————————————————————————————————————————
+async function fetchSheetValues(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
+  const data = await res.json();
+  return data.values || [];
+}
+
 async function loadImageLookup() {
-  try {
-    const res = await fetch(imageLookupUrl);
-    const json = await res.json();
-    const rows = json.values || [];
-
-    imageMap = new Map(
-      rows
-        .filter(r => r && r[0] && r[1])
-        .map(r => [normalizeKey(r[0]), cleanUrlMaybe(r[1])])
-    );
-  } catch (e) {
-    console.warn('ImageLookup failed to load (continuing without it).', e);
-    imageMap = new Map();
-  }
-}
-
-function getImageForTitle(itemTitle, fallbackFromOrdersSheet) {
-  // 1) if the Orders sheet already has a usable URL, use it
-  if (isLikelyUrl(fallbackFromOrdersSheet)) return cleanUrlMaybe(fallbackFromOrdersSheet);
-
-  // 2) else try ImageLookup map by exact normalized title
-  const key = normalizeKey(itemTitle);
-  return imageMap.get(key) || '';
-}
-
-// ———————————————————————————————————————————————
-// DATA: LOAD + PARSE ORDERS (HEADER-AWARE + FALLBACKS)
-// ———————————————————————————————————————————————
-async function loadOrders() {
-  try {
-    // load image map first (so we can enrich items)
-    await loadImageLookup();
-
-    const res = await fetch(ordersUrl);
-    const json = await res.json();
-    const rows = json.values || [];
-    if (rows.length < 2) throw new Error('No orders found');
-
-    // Header-aware mapping (works even if columns move)
-    const header = rows[0].map(h => normalizeKey(h));
-    const idx = (name) => header.indexOf(normalizeKey(name));
-
-    const iOrderId       = idx('orderid');
-    const iCustomerName  = idx('customername');
-    const iAddress       = idx('address');
-    const iItemTitle     = idx('itemtitle');
-    const iVariantTitle  = idx('varianttitle');
-    const iQty           = idx('qty');
-    const iNotes         = idx('notes');
-    const iImageUrlA     = idx('imageurl');
-    const iImageUrlB     = idx('image');      // some people name it "image"
-
-    const grouped = {};
-
-    for (const r of rows.slice(1)) {
-      // Fallback extraction if headers aren't present / sheet is “weird”
-      const orderId = (iOrderId >= 0 ? r[iOrderId] : r[0]) || '';
-      const itemTitle = (iItemTitle >= 0 ? r[iItemTitle] : r[3] || r[1]) || '';
-      const variantTitle = (iVariantTitle >= 0 ? r[iVariantTitle] : r[4]) || '';
-      const qtyRaw = (iQty >= 0 ? r[iQty] : r[5] || r[2]) || 0;
-
-      // If your sheet is 3 cols and column C is the image URL, we detect it:
-      // Example possible layouts:
-      //   [orderId, itemTitle, imageUrl] OR [itemTitle, qty, imageUrl] OR [orderId, itemTitle, qty]
-      let imageFromSheet = '';
-      if (iImageUrlA >= 0) imageFromSheet = r[iImageUrlA] || '';
-      else if (iImageUrlB >= 0) imageFromSheet = r[iImageUrlB] || '';
-      else if (r.length === 3 && isLikelyUrl(r[2])) imageFromSheet = r[2] || '';
-      else if (r.length >= 9 && isLikelyUrl(r[8])) imageFromSheet = r[8] || '';
-
-      // qty parsing
-      const qty = parseInt(qtyRaw, 10) || 0;
-
-      // pack size -> cans
-      const packSizeMatch = String(variantTitle || '').match(/(\d+)\s*pack/i);
-      const packSize = packSizeMatch ? parseInt(packSizeMatch[1], 10) : 1;
-      const cans = qty * (packSize || 1);
-
-      const customerName = (iCustomerName >= 0 ? r[iCustomerName] : r[1]) || '';
-      const address = (iAddress >= 0 ? r[iAddress] : r[2]) || '';
-      const notes = (iNotes >= 0 ? r[iNotes] : r[7]) || '';
-
-      if (!grouped[orderId]) {
-        grouped[orderId] = {
-          orderId,
-          customerName: customerName || '',
-          address: address || '',
-          notes: notes || '',
-          items: [],
-          totalCans: 0
-        };
-      }
-
-      const resolvedImageUrl = getImageForTitle(itemTitle, imageFromSheet);
-
-      grouped[orderId].items.push({
-        itemTitle: itemTitle || '',
-        cans,
-        imageUrl: resolvedImageUrl
-      });
-
-      grouped[orderId].totalCans += cans;
-    }
-
-    // stable, predictable sort for pack mode
-    const parsedOrders = Object.values(grouped);
-    parsedOrders.forEach(o => o.items.sort((a,b) => a.itemTitle.localeCompare(b.itemTitle)));
-
-    orders = parsedOrders;
-    packIndex = 0;
-
-    pickQueue = buildPickQueue(orders);
-    pickIndex = 0;
-    isPicking = false;
-    issues = [];
-
-    renderStart();
-  } catch (err) {
-    console.error(err);
-    renderStartError('Failed to load orders. Check sheet access / API key restrictions.');
-  }
-}
-
-function buildPickQueue(orderList) {
+  const rows = await fetchSheetValues(imageLookupUrl);
   const map = new Map();
+  for (const r of rows) {
+    const title = norm(r[0]);
+    const url   = norm(r[1]);
+    if (title) map.set(title, url);
+  }
+  return map;
+}
 
-  for (const o of orderList) {
-    for (const it of o.items) {
-      const key = normalizeKey(it.itemTitle);
-      if (!key) continue;
+async function loadVarietyPackMap() {
+  // VarietyPacks!A2:C => [PackTitle, BeerTitle, ImageUrl]
+  const rows = await fetchSheetValues(varietyPacksUrl);
+  const packMap = new Map();
 
-      const existing = map.get(key);
-      if (existing) {
-        existing.cans += it.cans;
-        // Keep first non-empty imageUrl
-        if (!existing.imageUrl && it.imageUrl) existing.imageUrl = it.imageUrl;
-      } else {
-        map.set(key, {
-          itemTitle: it.itemTitle,
-          cans: it.cans,
-          imageUrl: it.imageUrl || '',
-          location: guessLocation(it.itemTitle)
-        });
-      }
+  for (const r of rows) {
+    const packTitle = norm(r[0]);
+    const beerTitle = norm(r[1]);
+    const imgUrl    = norm(r[2]);
+
+    if (!packTitle || !beerTitle) continue;
+
+    if (!packMap.has(packTitle)) packMap.set(packTitle, []);
+    packMap.get(packTitle).push({ title: beerTitle, imageUrl: imgUrl });
+  }
+
+  return packMap;
+}
+
+// ———————————————————————————————————————————————
+// ORDER PARSING (from your Orders sheet)
+// Expected columns: orderId, customerName, address, itemTitle, variantTitle, qty, picked, notes, imageUrl
+// If your sheet differs, update the header mapping below.
+// ———————————————————————————————————————————————
+function parseOrders(rows) {
+  if (!rows.length) return [];
+
+  const header = rows[0].map(h => norm(h));
+  const idx = (name) => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
+
+  const iOrderId   = idx('orderId');
+  const iCustomer  = idx('customerName');
+  const iAddress   = idx('address');
+  const iItemTitle = idx('itemTitle');
+  const iVariant   = idx('variantTitle');
+  const iQty       = idx('qty');
+  const iPicked    = idx('picked');
+  const iNotes     = idx('notes');
+  const iImageUrl  = idx('imageUrl');
+
+  const itemsByOrder = new Map();
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+
+    const orderId   = norm(row[iOrderId]);
+    if (!orderId) continue;
+
+    const customer  = norm(row[iCustomer]);
+    const address   = norm(row[iAddress]);
+    const itemTitle = norm(row[iItemTitle]);
+    const variant   = norm(row[iVariant]);
+    const qty       = safeInt(row[iQty], 1);
+    const picked    = norm(row[iPicked]).toLowerCase() === 'true' || norm(row[iPicked]).toLowerCase() === 'yes';
+    const notes     = norm(row[iNotes]);
+    const imageUrl  = norm(row[iImageUrl]);
+
+    if (!itemsByOrder.has(orderId)) {
+      itemsByOrder.set(orderId, {
+        orderId,
+        customerName: customer,
+        address,
+        notes: '',
+        picked: false,
+        items: []
+      });
+    }
+
+    const o = itemsByOrder.get(orderId);
+    if (notes && !o.notes) o.notes = notes;
+    if (picked) o.picked = true;
+
+    if (itemTitle) {
+      o.items.push({
+        title: itemTitle,
+        variantTitle: variant,
+        qty,
+        picked,
+        imageUrl
+      });
     }
   }
 
-  const queue = Array.from(map.values());
-  queue.sort((a,b) => {
-    const la = a.location?.sortKey || '';
-    const lb = b.location?.sortKey || '';
-    if (la !== lb) return la.localeCompare(lb);
-    return a.itemTitle.localeCompare(b.itemTitle);
-  });
-
-  return queue;
+  return Array.from(itemsByOrder.values());
 }
 
 // ———————————————————————————————————————————————
-// START VIEW
+// VARIETY PACK EXPLOSION + PICK SORT
 // ———————————————————————————————————————————————
-function renderStart() {
-  showView(el.startView);
-  if (el.startError) el.startError.classList.add('hidden');
+function expandVarietyPacks(orderItems, packMap, imageLookupMap) {
+  const out = [];
 
-  setText(el.dashPending, orders.length);
-  const totalCans = pickQueue.reduce((sum, it) => sum + (it.cans || 0), 0);
-  setText(el.dashCans, totalCans);
+  for (const it of orderItems) {
+    const title = norm(it.title);
+    const qty   = safeInt(it.qty, 1);
 
-  if (el.startPickingBtn) el.startPickingBtn.disabled = pickQueue.length === 0;
-}
+    // If this line item is a pack that exists in the pack map,
+    // replace it with its component beers * qty.
+    const packItems = packMap.get(title);
 
-function renderStartError(msg) {
-  showView(el.startView);
-  setText(el.dashPending, '—');
-  setText(el.dashCans, '—');
-
-  if (el.startPickingBtn) el.startPickingBtn.disabled = true;
-  if (el.startError) {
-    el.startError.classList.remove('hidden');
-    setText(el.startError, msg);
-  }
-}
-
-// ———————————————————————————————————————————————
-// PICK VIEW (SCREEN 2 LOOP)
-// ———————————————————————————————————————————————
-function startPicking() {
-  if (!pickQueue.length) return;
-  isPicking = true;
-  pickIndex = 0;
-  issues = [];
-  renderPick();
-}
-
-function renderPick() {
-  if (!isPicking) return renderStart();
-
-  if (pickIndex >= pickQueue.length) {
-    isPicking = false;
-    renderComplete();
-    return;
-  }
-
-  showView(el.pickView);
-
-  const it = pickQueue[pickIndex];
-
-  setText(el.pickLocation, it.location?.label || 'LOCATION');
-  setText(el.pickProgress, `${pickIndex + 1} / ${pickQueue.length}`);
-  setText(el.pickName, it.itemTitle);
-  setText(el.pickQty, `PICK: ${it.cans} CANS`);
-
-  if (el.pickImage) {
-    el.pickImage.onerror = () => placeholderImage(el.pickImage);
-    if (it.imageUrl) el.pickImage.src = it.imageUrl;
-    else placeholderImage(el.pickImage);
-  }
-}
-
-function confirmPick() {
-  pickIndex++;
-  renderPick();
-}
-
-function openIssueModal() {
-  if (!el.issueModal) return;
-  el.issueModal.classList.remove('hidden');
-}
-
-function closeIssueModal() {
-  if (!el.issueModal) return;
-  el.issueModal.classList.add('hidden');
-}
-
-function logIssue(type) {
-  const it = pickQueue[pickIndex];
-  issues.push({
-    type,
-    itemTitle: it?.itemTitle || '',
-    cans: it?.cans || 0,
-    at: Date.now()
-  });
-  closeIssueModal();
-  pickIndex++;
-  renderPick();
-}
-
-// ———————————————————————————————————————————————
-// COMPLETE VIEW
-// ———————————————————————————————————————————————
-function renderComplete() {
-  showView(el.completeView);
-  setText(el.pickedCount, pickQueue.length);
-  setText(el.issueCount, issues.length);
-}
-
-// ———————————————————————————————————————————————
-// PACK MODE
-// ———————————————————————————————————————————————
-function calculateBoxes(n) {
-  if (n <= 6)  return { 24: 0, 12: 0, 6: 1 };
-  if (n <= 12) return { 24: 0, 12: 1, 6: 0 };
-
-  let best = { total: Infinity, totalCans: Infinity, counts: { 24: 0, 12: 0, 6: 0 } };
-
-  for (let a = 0; a <= Math.ceil(n / 24); a++) {
-    for (let b = 0; b <= Math.ceil(n / 12); b++) {
-      for (let c = 0; c <= Math.ceil(n / 6); c++) {
-        const totalCans = a * 24 + b * 12 + c * 6;
-        const totalBoxes = a + b + c;
-
-        if (totalCans >= n) {
-          const better =
-            totalBoxes < best.total ||
-            (totalBoxes === best.total && totalCans < best.totalCans);
-
-          if (better) {
-            best.total = totalBoxes;
-            best.totalCans = totalCans;
-            best.counts = { 24: a, 12: b, 6: c };
-          }
+    if (packItems && packItems.length) {
+      for (let n = 0; n < qty; n++) {
+        for (const p of packItems) {
+          const beerTitle = norm(p.title);
+          const imgUrl = norm(p.imageUrl) || imageLookupMap.get(beerTitle) || '';
+          out.push({
+            title: beerTitle,
+            qty: 1,
+            fromPack: title,
+            imageUrl: imgUrl
+          });
         }
       }
+      continue;
     }
-  }
-  return best.counts;
-}
 
-function goPackMode() {
-  showView(el.packModeView);
-  renderPackOrder();
-}
-
-function renderPackOrder() {
-  if (!orders.length) return;
-
-  // clamp
-  if (packIndex < 0) packIndex = 0;
-  if (packIndex > orders.length - 1) packIndex = orders.length - 1;
-
-  const o = orders[packIndex];
-
-  setText(el.packOrderId, `Order #${o.orderId}`);
-  setText(el.packCustomerName, o.customerName);
-  setText(el.packCustomerAddress, o.address);
-
-  if (el.packPrevBtn) el.packPrevBtn.disabled = packIndex === 0;
-  if (el.packNextBtn) el.packNextBtn.disabled = packIndex === orders.length - 1;
-
-  const b = calculateBoxes(o.totalCans);
-  const lines = [];
-  if (b[24]) lines.push(`${b[24]}×24-pack`);
-  if (b[12]) lines.push(`${b[12]}×12-pack`);
-  if (b[6])  lines.push(`${b[6]}×6-pack`);
-
-  if (el.packBoxesInfo) {
-    el.packBoxesInfo.innerHTML =
-      `<strong>Boxes Required:</strong> ${lines.length ? lines.join(', ') : '—'}<br>` +
-      `<strong>Total Cans:</strong> ${o.totalCans}` +
-      (o.notes ? `<br><strong>Notes:</strong> ${escapeHtml(o.notes)}` : '');
+    // Normal item: keep as is, but fill imageUrl if missing
+    const img = norm(it.imageUrl) || imageLookupMap.get(title) || '';
+    out.push({
+      title,
+      qty,
+      fromPack: null,
+      imageUrl: img
+    });
   }
 
-  // render items list
-  if (!el.packItemsContainer) return;
-  el.packItemsContainer.innerHTML = '';
-  const frag = document.createDocumentFragment();
-
-  for (const it of o.items) {
-    const row = document.createElement('div');
-    row.className = 'item';
-
-    const img = document.createElement('img');
-    img.alt = it.itemTitle;
-    img.onerror = () => { img.src = 'https://via.placeholder.com/60'; };
-    img.src = it.imageUrl || 'https://via.placeholder.com/60';
-
-    const details = document.createElement('div');
-    details.className = 'details';
-
-    const p1 = document.createElement('p');
-    p1.innerHTML = `<strong>${escapeHtml(it.itemTitle)}</strong>`;
-
-    const p2 = document.createElement('p');
-    p2.textContent = `${it.cans} cans`;
-
-    details.appendChild(p1);
-    details.appendChild(p2);
-
-    row.appendChild(img);
-    row.appendChild(details);
-    frag.appendChild(row);
+  // Merge same titles into one line (reduces noise)
+  const merged = new Map();
+  for (const x of out) {
+    const key = x.title;
+    if (!merged.has(key)) merged.set(key, { ...x });
+    else merged.get(key).qty += x.qty;
   }
-
-  el.packItemsContainer.appendChild(frag);
+  return Array.from(merged.values());
 }
 
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+function sortForYourPickPath(items) {
+  // Attach letter + rank
+  const enriched = items.map(it => {
+    const letter = letterForTitle(it.title);
+    const rank   = rankForLetter(letter);
+    return { ...it, letter, rank };
+  });
+
+  // Sort by rank, then by letter, then by title
+  return stableSortBy(enriched, (x) =>
+    `${String(x.rank).padStart(4,'0')}|${x.letter}|${x.title.toLowerCase()}`
+  );
 }
 
 // ———————————————————————————————————————————————
-// PACK PICKER (LAZY-LOAD) — Variety Packs (3 cols A-C)
+// MAIN LOAD
 // ———————————————————————————————————————————————
-async function loadPacksOnce() {
-  if (packsLoaded) return;
-  packsLoaded = true;
-
+async function loadAndRender() {
   try {
-    const [tR, vR] = await Promise.all([
-      fetch(packTitlesUrl).then(r => r.json()),
-      fetch(varietyPacksUrl).then(r => r.json())
+    // Load everything in parallel
+    const [ordersRaw, imageLookupMap, packMap] = await Promise.all([
+      fetchSheetValues(ordersUrl),
+      loadImageLookup(),
+      loadVarietyPackMap()
     ]);
 
-    const titles = (tR.values || []).map(r => r[0]).filter(Boolean);
-    varietyPacksData = vR.values || [];
+    const orders = parseOrders(ordersRaw);
 
-    if (el.packDropdown) {
-      el.packDropdown.innerHTML = `<option value="All">All</option>`;
-      for (const t of titles) el.packDropdown.add(new Option(t, t));
+    // For each order: explode packs, then sort to your loop
+    for (const o of orders) {
+      const expanded = expandVarietyPacks(o.items, packMap, imageLookupMap);
+      o.pickItems = sortForYourPickPath(expanded);
     }
 
-    displayPacks('All');
-  } catch (e) {
-    console.error(e);
-    if (el.results) el.results.textContent = 'Failed to load packs.';
+    // TODO: hook into your existing render function
+    // If you already have renderOrders(orders), use that and swap it to use o.pickItems.
+    renderOrders(orders);
+
+  } catch (err) {
+    console.error(err);
+    const el = document.getElementById('app') || document.body;
+    el.innerHTML = `<div style="padding:16px;font-family:system-ui;color:#b00020">
+      <b>Load error:</b> ${String(err.message || err)}
+    </div>`;
   }
 }
 
-function displayPacks(filter) {
-  if (!el.results) return;
-  el.results.innerHTML = '';
+// ———————————————————————————————————————————————
+// RENDER (KEEP YOUR EXISTING UI IF YOU HAVE ONE)
+// Replace this with your current rendering code.
+// The key: use order.pickItems (already exploded + sorted)
+// ———————————————————————————————————————————————
+function renderOrders(orders) {
+  const root = document.getElementById('app') || document.body;
+  root.innerHTML = '';
 
-  let list = varietyPacksData;
-  if (filter !== 'All') list = list.filter(r => r[0] === filter);
-
-  if (!list.length) {
-    el.results.textContent = 'No entries.';
-    return;
-  }
-
-  const frag = document.createDocumentFragment();
-
-  for (const [pack, beer, imgUrl] of list) {
+  for (const o of orders) {
     const card = document.createElement('div');
-    card.className = 'pack-item';
+    card.style.border = '1px solid #ddd';
+    card.style.borderRadius = '10px';
+    card.style.padding = '12px';
+    card.style.margin = '10px 0';
+    card.style.fontFamily = 'system-ui';
 
-    const img = document.createElement('img');
-    img.alt = beer || '';
-    img.onerror = () => { img.src = 'https://via.placeholder.com/50'; };
-    img.src = cleanUrlMaybe(imgUrl) || 'https://via.placeholder.com/50';
+    const h = document.createElement('div');
+    h.innerHTML = `<b>Order:</b> ${o.orderId} &nbsp; <b>${o.customerName || ''}</b>`;
+    card.appendChild(h);
 
-    const wrap = document.createElement('div');
-    const h3 = document.createElement('h3');
-    h3.textContent = `${pack || ''} – ${beer || ''}`;
+    const list = document.createElement('div');
+    list.style.marginTop = '10px';
 
-    wrap.appendChild(h3);
-    card.appendChild(img);
-    card.appendChild(wrap);
+    for (const it of (o.pickItems || [])) {
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.gap = '10px';
+      row.style.alignItems = 'center';
+      row.style.padding = '6px 0';
+      row.style.borderBottom = '1px dashed #eee';
 
-    frag.appendChild(card);
+      const img = document.createElement('img');
+      img.src = it.imageUrl || '';
+      img.alt = it.title;
+      img.style.width = '44px';
+      img.style.height = '44px';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '8px';
+      img.style.background = '#f3f3f3';
+
+      const txt = document.createElement('div');
+      const packNote = it.fromPack ? ` <span style="color:#777">(from ${it.fromPack})</span>` : '';
+      const unknown = it.rank === 9999 ? ` <span style="color:#b00020">[UNMAPPED ${it.letter}]</span>` : '';
+      txt.innerHTML = `<div><b>${it.qty}×</b> ${it.title}${packNote}${unknown}</div>
+                       <div style="color:#666;font-size:12px;">Letter: <b>${it.letter}</b></div>`;
+
+      row.appendChild(img);
+      row.appendChild(txt);
+      list.appendChild(row);
+    }
+
+    card.appendChild(list);
+    root.appendChild(card);
   }
-
-  el.results.appendChild(frag);
 }
 
-// ———————————————————————————————————————————————
-// EVENTS (wired once) — NULL SAFE
-// ———————————————————————————————————————————————
-on(el.startPickingBtn, 'click', startPicking);
-on(el.confirmPickBtn, 'click', confirmPick);
-
-on(el.issueBtn, 'click', openIssueModal);
-on(el.closeIssueModalBtn, 'click', closeIssueModal);
-
-document.querySelectorAll('.modal-option').forEach(btn => {
-  btn.addEventListener('click', () => logIssue(btn.getAttribute('data-issue') || 'other'));
-});
-
-on(el.goToPackBtn, 'click', goPackMode);
-on(el.goPackModeBtn, 'click', goPackMode);
-
-on(el.goStartBtn, 'click', () => showView(el.startView));
-on(el.backToStartBtn, 'click', () => showView(el.startView));
-
-on(el.packPrevBtn, 'click', () => {
-  if (packIndex > 0) { packIndex--; renderPackOrder(); }
-});
-on(el.packNextBtn, 'click', () => {
-  if (packIndex < orders.length - 1) { packIndex++; renderPackOrder(); }
-});
-
-on(el.openPackPickerBtn, 'click', async () => {
-  if (!el.packPickerPanel) return;
-  el.packPickerPanel.classList.toggle('hidden');
-
-  if (!el.packPickerPanel.classList.contains('hidden')) {
-    if (el.results) el.results.textContent = 'Loading packs…';
-    await loadPacksOnce();
-  }
-});
-
-on(el.packDropdown, 'change', (e) => displayPacks(e.target.value));
-
-// ———————————————————————————————————————————————
-// INIT
-// ———————————————————————————————————————————————
-showView(el.startView);
-loadOrders();
+// Kick it off
+loadAndRender();
