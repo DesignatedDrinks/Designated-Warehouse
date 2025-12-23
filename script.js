@@ -36,8 +36,8 @@ function normalizeText(s){
 }
 
 /**
- * NEW: merge by can title only (NOT variant)
- * This is the key change that combines singles + 4-packs + 12-packs into total cans.
+ * Merge by can title only (NOT variant)
+ * Combines single + 4-pack + 12-pack into total cans.
  */
 function itemKeyByTitle(itemTitle){
   return normalizeText(itemTitle);
@@ -91,6 +91,24 @@ async function fetchJson(url){
 }
 
 // =========================================================
+// BRAND PRIORITY: Harmon first, Temple/Templ last
+// =========================================================
+function isHarmons(title){
+  const t = (title || '').toLowerCase();
+  return t.includes("harmon");
+}
+function isTemple(title){
+  const t = (title || '').toLowerCase();
+  return t.includes("temple") || t.includes("templ");
+}
+// 0 = first, 1 = normal, 2 = last
+function brandPriority(title){
+  if(isHarmons(title)) return 0;
+  if(isTemple(title)) return 2;
+  return 1;
+}
+
+// =========================================================
 // PACK SIZE PARSING (convert packs -> cans)
 // =========================================================
 function parsePackSize(itemTitle, variantTitle){
@@ -99,17 +117,19 @@ function parsePackSize(itemTitle, variantTitle){
   // explicit singles
   if(/\bsingle\b/.test(s) || /\bcan\b/.test(s) || /\b1 pack\b/.test(s)) return 1;
 
-  // common patterns: "12 pack", "12-pack", "12pk", "12 x 355", "case (12 x ...)"
+  // patterns: "12 pack", "12-pack", "12pk"
   const m1 = s.match(/(\d+)\s*[- ]?\s*(pack|pk)\b/);
   if(m1) return clampPack(parseInt(m1[1], 10));
 
-  const m2 = s.match(/\b(\d+)\s*x\s*\d+/); // "12 x 355"
+  // "12 x 355"
+  const m2 = s.match(/\b(\d+)\s*x\s*\d+/);
   if(m2) return clampPack(parseInt(m2[1], 10));
 
-  const m3 = s.match(/\bcase\s*\(\s*(\d+)\s*x/i); // "Case (12 x 355 ml)"
+  // "Case (12 x 355 ml)"
+  const m3 = s.match(/\bcase\s*\(\s*(\d+)\s*x/i);
   if(m3) return clampPack(parseInt(m3[1], 10));
 
-  // fallback: sometimes variant is literally "12" or "24"
+  // variant literally "12" or "24"
   const m4 = safe(variantTitle).trim().match(/^(\d{1,3})$/);
   if(m4) return clampPack(parseInt(m4[1], 10));
 
@@ -118,16 +138,13 @@ function parsePackSize(itemTitle, variantTitle){
 }
 
 function clampPack(n){
-  // Prevent insane multipliers from bad strings
   if(!Number.isFinite(n) || n <= 0) return 1;
   if(n > 60) return 1;
   return n;
 }
 
 function formatSourceBreakdown(sources){
-  // sources = [{units, packSize, cans}]
-  // output example: "2×12 + 1×1"
-  const map = new Map(); // key: packSize, val: units
+  const map = new Map(); // packSize -> units
   for(const src of sources){
     const p = src.packSize || 1;
     map.set(p, (map.get(p) || 0) + (src.units || 0));
@@ -139,7 +156,7 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// AISLE PATH (PLACEHOLDER)
+// AISLE PATH (your placeholder map)
 // =========================================================
 function guessAisle(title){
   const t = safe(title).toUpperCase();
@@ -172,7 +189,7 @@ function setPicked(orderId, key, val){
 }
 
 // =========================================================
-// BOX BREAKDOWN (24 / 12 / 6 only) — uses TOTAL CANS now
+// BOX BREAKDOWN (24 / 12 / 6 only) — uses TOTAL CANS
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -186,8 +203,7 @@ function boxBreakdown(totalCans){
   if(n <= 6){ out.b6 = 1; out.loose = n; return out; }
   if(n <= 12){ out.b12 = 1; out.loose = n; return out; }
 
-  // 13–23 -> grab another 24 (fastest reality)
-  out.b24 += 1;
+  out.b24 += 1; // 13–23 -> grab another 24
   out.loose = n;
   return out;
 }
@@ -265,19 +281,18 @@ function buildOrders(rows){
       if(!r.itemTitle) continue;
       if(r.cans <= 0) continue;
 
-      // ✅ merge by title only
-      const k = itemKeyByTitle(r.itemTitle);
+      const k = itemKeyByTitle(r.itemTitle); // ✅ merge by title
 
       if(!merged.has(k)){
         const aisle = guessAisle(r.itemTitle);
         merged.set(k, {
           key: k,
           itemTitle: r.itemTitle,
-          qtyCans: 0,                     // ✅ total cans
+          qtyCans: 0,
           aisle: aisle.aisle,
           aisleSort: aisle.sort,
           imageResolved: resolveImage(r.imageUrl, r.itemTitle),
-          sources: []                     // units + packSize breakdown
+          sources: []
         });
       }
 
@@ -292,7 +307,12 @@ function buildOrders(rows){
       item.sources.push({ units: r.units, packSize: r.packSize, cans: r.cans });
     }
 
+    // ✅ Harmon first, Temple last, then aisle path, then alpha
     const items = Array.from(merged.values()).sort((a,b)=>{
+      const pa = brandPriority(a.itemTitle);
+      const pb = brandPriority(b.itemTitle);
+      if(pa !== pb) return pa - pb;
+
       if(a.aisleSort !== b.aisleSort) return a.aisleSort - b.aisleSort;
       return a.itemTitle.localeCompare(b.itemTitle);
     });
@@ -325,7 +345,7 @@ function rebuildQueue(){
 }
 
 function totalsForOrder(o){
-  const total = o.items.reduce((s,it)=> s + it.qtyCans, 0); // ✅ cans
+  const total = o.items.reduce((s,it)=> s + it.qtyCans, 0);
   const picked = o.items.reduce((s,it)=> s + (isPicked(o.orderId, it.key) ? it.qtyCans : 0), 0);
   return { total, picked };
 }
@@ -385,18 +405,16 @@ function renderList(){
   });
 }
 
-function setNextCard(item, titleId, qtyId, aisleId, imgId){
+function setNextCard(item, qtyId, aisleId, imgId){
   if(!item){
     $(qtyId).textContent = '—';
     $(aisleId).textContent = '—';
     $(imgId).src = placeholderSvg('—');
-    if($(titleId)) $(titleId).textContent = '—';
     return;
   }
-  $(qtyId).textContent = `${item.qtyCans}`;  // ✅ total cans
+  $(qtyId).textContent = `${item.qtyCans}`;
   $(aisleId).textContent = item.aisle;
   $(imgId).src = item.imageResolved;
-  if($(titleId)) $(titleId).textContent = item.itemTitle;
 }
 
 function renderCurrent(){
@@ -406,8 +424,8 @@ function renderCurrent(){
     $('curSub').innerHTML = '';
     $('curQty').textContent = '—';
     $('curImg').src = placeholderSvg('No orders');
-    setNextCard(null,'n1Title','n1Qty','n1Aisle','n1Img');
-    setNextCard(null,'n2Title','n2Qty','n2Aisle','n2Img');
+    setNextCard(null,'n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Qty','n2Aisle','n2Img');
     return;
   }
 
@@ -421,9 +439,9 @@ function renderCurrent(){
     $('curTitle').textContent = 'DONE — order picked';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curQty').textContent = '✔';
-    $('curImg').src = placeholderSvg('DONE');
-    setNextCard(null,'n1Title','n1Qty','n1Aisle','n1Img');
-    setNextCard(null,'n2Title','n2Qty','n2Aisle','n2Img');
+    $('curImg').src = '/Designated-Warehouse/done.svg';
+    setNextCard(null,'n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Qty','n2Aisle','n2Img');
     return;
   }
 
@@ -434,11 +452,11 @@ function renderCurrent(){
     `<span class="badge">${escapeHtml(cur.aisle)}</span>` +
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
-  $('curQty').textContent = cur.qtyCans;      // ✅ total cans
+  $('curQty').textContent = cur.qtyCans;
   $('curImg').src = cur.imageResolved;
 
-  setNextCard(queue[queueIndex+1], 'n1Title','n1Qty','n1Aisle','n1Img');
-  setNextCard(queue[queueIndex+2], 'n2Title','n2Qty','n2Aisle','n2Img');
+  setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
+  setNextCard(queue[queueIndex+2], 'n2Qty','n2Aisle','n2Img');
 }
 
 function renderAll(){
@@ -524,7 +542,7 @@ async function init(){
     $('btnPrevOrder').addEventListener('click', prevOrder);
     $('btnNextOrder').addEventListener('click', nextOrder);
 
-    // hero “Next →” = pick current (mark picked + advance)
+    // hero “Next →” = mark picked + advance
     $('btnPickNext').addEventListener('click', pickCurrent);
 
     $('next1').addEventListener('click', ()=> jumpNext(1));
@@ -551,8 +569,8 @@ async function init(){
     $('curSub').textContent = 'Fix the sheet and reload.';
     $('curQty').textContent = '—';
     $('curImg').src = placeholderSvg('Error');
-    setNextCard(null,'n1Title','n1Qty','n1Aisle','n1Img');
-    setNextCard(null,'n2Title','n2Qty','n2Aisle','n2Img');
+    setNextCard(null,'n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Qty','n2Aisle','n2Img');
   }
 }
 
