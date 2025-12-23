@@ -121,7 +121,6 @@ function setPicked(orderId, key, val){
 
 // =========================================================
 // BOX BREAKDOWN (24 / 12 / 6 only)
-// For awkward numbers like 16 -> 1×24 (space left)
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -132,11 +131,10 @@ function boxBreakdown(totalCans){
 
   if(n === 0) return out;
 
-  // Best-fit remainder using only 12/6. If it doesn't fit cleanly, use another 24.
   if(n <= 6){ out.b6 = 1; out.loose = n; return out; }
   if(n <= 12){ out.b12 = 1; out.loose = n; return out; }
 
-  // 13–23 -> fastest reality: grab another 24 and leave space
+  // 13–23 -> grab another 24 (fastest reality)
   out.b24 += 1;
   out.loose = n;
   return out;
@@ -271,7 +269,7 @@ function setOrderBar(){
 
   $('whoLine').textContent = `${firstNameInitial(o.customerName)} · ${cityProvince(o.address)}`;
   $('addrLine').textContent = safe(o.address) || '—';
-  $('chipOrder').textContent = `#${o.orderId}`;        // FIXED (no ###)
+  $('chipOrder').textContent = `#${o.orderId}`;
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
@@ -317,16 +315,16 @@ function renderList(){
 
 function setNextCard(item, titleId, qtyId, aisleId, imgId){
   if(!item){
-    $(titleId).textContent = '—';
     $(qtyId).textContent = '—';
     $(aisleId).textContent = '—';
     $(imgId).src = placeholderSvg('—');
+    if($(titleId)) $(titleId).textContent = '—';
     return;
   }
-  $(titleId).textContent = item.itemTitle;
-  $(qtyId).textContent = item.qty;
+  $(qtyId).textContent = `${item.qty}`;     // REAL QTY
   $(aisleId).textContent = item.aisle;
   $(imgId).src = item.imageResolved;
+  if($(titleId)) $(titleId).textContent = item.itemTitle;
 }
 
 function renderCurrent(){
