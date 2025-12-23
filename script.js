@@ -12,10 +12,12 @@ const $ = id => document.getElementById(id);
 
 let orders = [];
 let orderIndex = 0;
+
+// queue = unpicked items in aisle order
 let queue = [];
 let queueIndex = 0;
 
-// Undo stack: { orderId, key, prevValue, newValue, prevQueueIndex }
+// Undo stack: { orderId, key, prevValue, prevQueueIndex }
 let undoStack = [];
 
 const STORAGE_KEY = 'dw_picked_queue_v1';
@@ -84,12 +86,12 @@ async function fetchJson(url){
 }
 
 // =========================================================
-// AISLE PATH (DEFAULT) — swap this later with your real map
+// AISLE PATH (PLACEHOLDER)
+// Replace this with your real map when ready.
 // =========================================================
 function guessAisle(title){
   const t = safe(title).toUpperCase();
   const ch = (t.match(/[A-Z]/) || ['?'])[0];
-  // snake-ish buckets
   if(ch >= 'A' && ch <= 'H') return { aisle:'Aisle 1', sort:1 };
   if(ch >= 'I' && ch <= 'Q') return { aisle:'Aisle 2', sort:2 };
   if(ch >= 'R' && ch <= 'Z') return { aisle:'Aisle 3', sort:3 };
@@ -97,7 +99,7 @@ function guessAisle(title){
 }
 
 // =========================================================
-// PICKED STATE
+// PICKED STATE (LOCAL ONLY)
 // =========================================================
 function loadPicked(){
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
@@ -106,7 +108,6 @@ function loadPicked(){
 function savePicked(obj){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
 }
-
 function isPicked(orderId, key){
   const p = loadPicked();
   return !!(p[orderId] && p[orderId][key]);
@@ -119,7 +120,7 @@ function setPicked(orderId, key, val){
 }
 
 // =========================================================
-// BOX BREAKDOWN (24 / 12 / 6 / remainder)
+// BOX BREAKDOWN (24 / 12 / 6)
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -128,11 +129,9 @@ function boxBreakdown(totalCans){
   out.b24 = Math.floor(n / 24);
   n = n % 24;
 
-  // choose best fit for remainder
   if(n === 0) return out;
   if(n <= 6){ out.b6 = 1; out.loose = n; return out; }
   if(n <= 12){ out.b12 = 1; out.loose = n; return out; }
-  // 13–23 → use another 24 and leave space (fastest IRL)
   out.b24 += 1;
   out.loose = n;
   return out;
@@ -233,6 +232,7 @@ function buildOrders(rows){
     });
   }
 
+  // latest first (string compare; fine for Shopify-like numbers)
   out.sort((a,b)=> (a.orderId > b.orderId ? -1 : 1));
   return out;
 }
@@ -246,9 +246,9 @@ function rebuildQueue(){
   const o = currentOrder();
   if(!o) { queue=[]; queueIndex=0; return; }
 
-  // queue = unpicked items in aisle order
   queue = o.items.filter(it => !isPicked(o.orderId, it.key));
-  queueIndex = Math.min(queueIndex, Math.max(0, queue.length - 1));
+  if(queueIndex < 0) queueIndex = 0;
+  if(queueIndex > queue.length - 1) queueIndex = Math.max(0, queue.length - 1);
 }
 
 function totalsForOrder(o){
@@ -267,7 +267,7 @@ function setOrderBar(){
 
   $('whoLine').textContent = `${firstNameInitial(o.customerName)} · ${cityProvince(o.address)}`;
   $('addrLine').textContent = safe(o.address) || '—';
-  $('chipOrder').textContent = `#${o.orderId}`;
+  $('chipOrder').textContent = `##${o.orderId}`;
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
@@ -276,11 +276,20 @@ function setOrderBar(){
   $('progressRight').textContent = `${total} total`;
 }
 
+function escapeHtml(str){
+  return (str ?? '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+
 function renderList(){
   const o = currentOrder();
   if(!o) { $('listBody').innerHTML=''; return; }
 
-  $('listBody').innerHTML = o.items.map((it, idx)=>{
+  $('listBody').innerHTML = o.items.map((it)=>{
     const done = isPicked(o.orderId, it.key);
     return `
       <div class="listRow ${done ? 'done' : ''}" data-key="${it.key}">
@@ -302,25 +311,18 @@ function renderList(){
   });
 }
 
-function escapeHtml(str){
-  return (str ?? '').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#039;");
-}
-
-function setNextCard(n, item, titleId, qtyId, subId){
+function setNextCard(item, titleId, qtyId, aisleId, imgId){
   if(!item){
     $(titleId).textContent = '—';
     $(qtyId).textContent = '—';
-    $(subId).textContent = '—';
+    $(aisleId).textContent = '—';
+    $(imgId).src = placeholderSvg('—');
     return;
   }
   $(titleId).textContent = item.itemTitle;
   $(qtyId).textContent = item.qty;
-  $(subId).textContent = `${item.aisle}${item.variantTitle ? ' · ' + item.variantTitle : ''}`;
+  $(aisleId).textContent = item.aisle;
+  $(imgId).src = item.imageResolved;
 }
 
 function renderCurrent(){
@@ -329,7 +331,9 @@ function renderCurrent(){
     $('curTitle').textContent = 'No orders found';
     $('curSub').innerHTML = '';
     $('curQty').textContent = '—';
-    $('curImg').src = '';
+    $('curImg').src = placeholderSvg('No orders');
+    setNextCard(null,'n1Title','n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Title','n2Qty','n2Aisle','n2Img');
     return;
   }
 
@@ -339,13 +343,14 @@ function renderCurrent(){
 
   const cur = queue[queueIndex];
 
+  // DONE
   if(!cur){
     $('curTitle').textContent = 'DONE — order picked';
-    $('curSub').innerHTML = `<span class="badge">Grab boxes: ${boxLabel(totalsForOrder(o).total)}</span>`;
+    $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curQty').textContent = '✔';
-    $('curImg').src = resolveImage('', 'DONE');
-    setNextCard(1, null, 'n1Title','n1Qty','n1Sub');
-    setNextCard(2, null, 'n2Title','n2Qty','n2Sub');
+    $('curImg').src = placeholderSvg('DONE');
+    setNextCard(null,'n1Title','n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Title','n2Qty','n2Aisle','n2Img');
     return;
   }
 
@@ -357,8 +362,8 @@ function renderCurrent(){
   $('curQty').textContent = cur.qty;
   $('curImg').src = cur.imageResolved;
 
-  setNextCard(1, queue[queueIndex+1], 'n1Title','n1Qty','n1Sub');
-  setNextCard(2, queue[queueIndex+2], 'n2Title','n2Qty','n2Sub');
+  setNextCard(queue[queueIndex+1], 'n1Title','n1Qty','n1Aisle','n1Img');
+  setNextCard(queue[queueIndex+2], 'n2Title','n2Qty','n2Aisle','n2Img');
 }
 
 function renderAll(){
@@ -380,15 +385,13 @@ function pickCurrent(){
   const prevIndex = queueIndex;
 
   setPicked(o.orderId, cur.key, true);
-  undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, newValue:true, prevQueueIndex:prevIndex });
+  undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
 
-  // advance to next item automatically (same index now points to next because queue shrinks)
+  // auto-advance (queue shrinks; same index becomes next)
   renderAll();
 }
 
 function skipCurrent(){
-  const o = currentOrder();
-  if(!o) return;
   rebuildQueue();
   if(queue.length === 0) return;
   queueIndex = Math.min(queueIndex + 1, queue.length - 1);
@@ -401,7 +404,6 @@ function undoLast(){
 
   setPicked(u.orderId, u.key, u.prevValue);
 
-  // restore position if still on same order
   const o = currentOrder();
   if(o && o.orderId === u.orderId){
     rebuildQueue();
@@ -410,6 +412,15 @@ function undoLast(){
   }
 
   renderAll();
+}
+
+function jumpNext(offset){
+  rebuildQueue();
+  const target = queueIndex + offset;
+  if(target >= 0 && target <= queue.length - 1){
+    queueIndex = target;
+    renderAll();
+  }
 }
 
 function prevOrder(){
@@ -434,11 +445,16 @@ function nextOrder(){
 // =========================================================
 async function init(){
   try{
+    // Buttons
     $('btnPicked').addEventListener('click', pickCurrent);
     $('btnSkip').addEventListener('click', skipCurrent);
     $('btnUndo').addEventListener('click', undoLast);
     $('btnPrevOrder').addEventListener('click', prevOrder);
     $('btnNextOrder').addEventListener('click', nextOrder);
+
+    // Tap next cards to jump (optional)
+    $('next1').addEventListener('click', ()=> jumpNext(1));
+    $('next2').addEventListener('click', ()=> jumpNext(2));
 
     const j = await fetchJson(ordersUrl);
     const values = j.values || [];
@@ -460,7 +476,11 @@ async function init(){
     $('curTitle').textContent = 'Error';
     $('curSub').textContent = 'Fix the sheet and reload.';
     $('curQty').textContent = '—';
+    $('curImg').src = placeholderSvg('Error');
+    setNextCard(null,'n1Title','n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Title','n2Qty','n2Aisle','n2Img');
   }
 }
 
 init();
+
