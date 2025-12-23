@@ -54,7 +54,6 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- ✅ qty breathes + RED -->
           <div class="qtyBig qtyBreathe" id="curQty">—</div>
         </div>
 
@@ -64,10 +63,7 @@
           </div>
 
           <div class="heroSide">
-            <!-- ✅ does NOT breathe -->
-            <button id="btnPickNext" class="btn heroNext secondary" type="button">
-              Next →
-            </button>
+            <button id="btnPickNext" class="btn heroNext secondary" type="button">Next →</button>
             <div class="heroHint">Tap once per item</div>
           </div>
         </div>
@@ -107,7 +103,17 @@
           <div class="listTitle">Order list</div>
           <div class="listHint">Tap a row to jump (optional)</div>
         </div>
+
         <div id="listBody" class="listBody"></div>
+
+        <div class="listFooter">
+          <button id="btnResetOrder" class="btn big danger" type="button">
+            Reset this order
+          </button>
+          <div class="resetHint">
+            Clears picked progress for this order on this device only.
+          </div>
+        </div>
       </div>
 
     </section>
