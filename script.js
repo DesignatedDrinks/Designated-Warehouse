@@ -19,8 +19,6 @@ let queueIndex = 0;
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v1';
 
-let donePromptTimer = null;
-
 // =========================================================
 // UTILS
 // =========================================================
@@ -278,7 +276,6 @@ function buildOrders(rows){
 
       const item = merged.get(k);
 
-      // prefer real image over placeholder
       if(item.imageResolved.startsWith('data:image') && r.imageUrl && r.imageUrl.startsWith('http')){
         item.imageResolved = r.imageUrl;
       }
@@ -404,26 +401,31 @@ function setNextCard(item, qtyId, aisleId, imgId){
   im.src = item.imageResolved;
 }
 
-function clearDonePrompt(){
-  if(donePromptTimer){
-    clearTimeout(donePromptTimer);
-    donePromptTimer = null;
+// MAIN QTY BUTTON MODE
+function setQtyMode(mode, numberText){
+  const num = $('curQtyNumber');
+  const done = $('curQtyDone');
+  if(!num || !done) return;
+
+  if(mode === 'done'){
+    num.style.display = 'none';
+    done.style.display = 'grid';
+  }else{
+    done.style.display = 'none';
+    num.style.display = 'block';
+    num.textContent = numberText ?? '—';
   }
-  const btn = $('btnNextOrder');
-  if(btn) btn.classList.remove('nextOrderFocus');
 }
 
 function renderCurrent(){
   const o = currentOrder();
   const nextPickBtn = $('btnPickNext');
 
-  clearDonePrompt();
-
   if(!o){
     if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
     $('curTitle').textContent = 'No orders found';
     $('curSub').textContent = '';
-    $('curQty').textContent = '—';
+    setQtyMode('qty', '—');
     $('curImg').src = placeholderSvg('No orders');
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
@@ -439,22 +441,15 @@ function renderCurrent(){
   if(!cur){
     if(nextPickBtn) nextPickBtn.style.visibility = 'hidden';
 
-    $('curTitle').textContent = 'DONE — order picked';
+    $('curTitle').textContent = 'ORDER PICKED';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
-    $('curQty').textContent = '✔';
     $('curImg').src = './done.svg';
+
+    // ✅ turn pill into DONE NEXT button
+    setQtyMode('done');
 
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
-
-    donePromptTimer = setTimeout(()=>{
-      const nextOrderBtn = $('btnNextOrder');
-      if(nextOrderBtn){
-        nextOrderBtn.classList.add('nextOrderFocus');
-        try { nextOrderBtn.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'}); } catch {}
-      }
-    }, 1500);
-
     return;
   }
 
@@ -467,7 +462,8 @@ function renderCurrent(){
     `<span class="badge">${escapeHtml(cur.aisle)}</span>` +
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
-  $('curQty').textContent = cur.qtyCans;
+  setQtyMode('qty', cur.qtyCans);
+
   $('curImg').src = cur.imageResolved;
 
   setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
@@ -564,10 +560,20 @@ function resetThisOrder(){
   undoStack = [];
   queueIndex = 0;
 
-  clearDonePrompt();
   renderAll();
-
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+}
+
+// DONE NEXT: red pill click advances order ONLY when done
+function qtyPillClick(){
+  const o = currentOrder();
+  if(!o) return;
+
+  rebuildQueue();
+  const done = (queue.length === 0);
+  if(!done) return; // ignore during picking
+
+  nextOrder();
 }
 
 // =========================================================
@@ -585,6 +591,8 @@ async function init(){
 
     $('next1')?.addEventListener('click', ()=> jumpNext(1));
     $('next2')?.addEventListener('click', ()=> jumpNext(2));
+
+    $('curQty')?.addEventListener('click', qtyPillClick);
 
     const j = await fetchJson(ordersUrl);
     const values = j.values || [];
@@ -605,7 +613,7 @@ async function init(){
     setError(e.message);
     $('curTitle').textContent = 'Error';
     $('curSub').textContent = 'Fix the sheet and reload.';
-    $('curQty').textContent = '—';
+    setQtyMode('qty','—');
     $('curImg').src = placeholderSvg('Error');
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
