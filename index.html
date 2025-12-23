@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
 
-  <!-- GitHub Pages (case-sensitive repo name) -->
   <link rel="stylesheet" href="/Designated-Warehouse/style.css" />
 </head>
 <body>
@@ -63,6 +62,32 @@
           <div class="qtyBig" id="curQty">—</div>
         </div>
 
+        <!-- NEXT (TWO SMALL, ALWAYS VISIBLE) -->
+        <div class="nextRow">
+          <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
+            <div class="miniTop">
+              <div class="miniQty" id="n1Qty">—</div>
+              <div class="miniAisle" id="n1Aisle">—</div>
+            </div>
+            <div class="miniThumb">
+              <img id="n1Img" alt="Next item image 1" />
+            </div>
+            <div class="miniTitle" id="n1Title">—</div>
+          </button>
+
+          <button class="card nextTap" id="next2" type="button" aria-label="Next item 2">
+            <div class="miniTop">
+              <div class="miniQty" id="n2Qty">—</div>
+              <div class="miniAisle" id="n2Aisle">—</div>
+            </div>
+            <div class="miniThumb">
+              <img id="n2Img" alt="Next item image 2" />
+            </div>
+            <div class="miniTitle" id="n2Title">—</div>
+          </button>
+        </div>
+
+        <!-- BIG IMAGE (CAPPED HEIGHT) -->
         <div class="imgWrap bigImg">
           <img id="curImg" alt="Current item image" />
         </div>
@@ -74,31 +99,6 @@
             <button id="btnUndo" class="btn big danger">Undo last</button>
           </div>
         </div>
-      </div>
-
-      <!-- NEXT (TWO SMALL, SIDE BY SIDE) -->
-      <div class="nextRow">
-        <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
-          <div class="miniTop">
-            <div class="miniQty" id="n1Qty">—</div>
-            <div class="miniAisle" id="n1Aisle">—</div>
-          </div>
-          <div class="miniThumb">
-            <img id="n1Img" alt="Next item image 1" />
-          </div>
-          <div class="miniTitle" id="n1Title">—</div>
-        </button>
-
-        <button class="card nextTap" id="next2" type="button" aria-label="Next item 2">
-          <div class="miniTop">
-            <div class="miniQty" id="n2Qty">—</div>
-            <div class="miniAisle" id="n2Aisle">—</div>
-          </div>
-          <div class="miniThumb">
-            <img id="n2Img" alt="Next item image 2" />
-          </div>
-          <div class="miniTitle" id="n2Title">—</div>
-        </button>
       </div>
 
       <!-- OPTIONAL LIST -->
