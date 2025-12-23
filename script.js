@@ -87,7 +87,7 @@ async function fetchJson(url){
 
 // =========================================================
 // AISLE PATH (PLACEHOLDER)
-// Replace this with your real map when ready.
+// Replace with your real mapping when ready.
 // =========================================================
 function guessAisle(title){
   const t = safe(title).toUpperCase();
@@ -120,7 +120,8 @@ function setPicked(orderId, key, val){
 }
 
 // =========================================================
-// BOX BREAKDOWN (24 / 12 / 6)
+// BOX BREAKDOWN (24 / 12 / 6 only)
+// For awkward numbers like 16 -> 1×24 (space left)
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -130,8 +131,12 @@ function boxBreakdown(totalCans){
   n = n % 24;
 
   if(n === 0) return out;
+
+  // Best-fit remainder using only 12/6. If it doesn't fit cleanly, use another 24.
   if(n <= 6){ out.b6 = 1; out.loose = n; return out; }
   if(n <= 12){ out.b12 = 1; out.loose = n; return out; }
+
+  // 13–23 -> fastest reality: grab another 24 and leave space
   out.b24 += 1;
   out.loose = n;
   return out;
@@ -232,7 +237,6 @@ function buildOrders(rows){
     });
   }
 
-  // latest first (string compare; fine for Shopify-like numbers)
   out.sort((a,b)=> (a.orderId > b.orderId ? -1 : 1));
   return out;
 }
@@ -267,7 +271,7 @@ function setOrderBar(){
 
   $('whoLine').textContent = `${firstNameInitial(o.customerName)} · ${cityProvince(o.address)}`;
   $('addrLine').textContent = safe(o.address) || '—';
-  $('chipOrder').textContent = `##${o.orderId}`;
+  $('chipOrder').textContent = `#${o.orderId}`;        // FIXED (no ###)
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
@@ -343,7 +347,6 @@ function renderCurrent(){
 
   const cur = queue[queueIndex];
 
-  // DONE
   if(!cur){
     $('curTitle').textContent = 'DONE — order picked';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
@@ -372,7 +375,7 @@ function renderAll(){
 }
 
 // =========================================================
-// ACTIONS (ONE TAP PICK, AUTO ADVANCE)
+// ACTIONS
 // =========================================================
 function pickCurrent(){
   const o = currentOrder();
@@ -387,7 +390,6 @@ function pickCurrent(){
   setPicked(o.orderId, cur.key, true);
   undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
 
-  // auto-advance (queue shrinks; same index becomes next)
   renderAll();
 }
 
@@ -445,14 +447,12 @@ function nextOrder(){
 // =========================================================
 async function init(){
   try{
-    // Buttons
     $('btnPicked').addEventListener('click', pickCurrent);
     $('btnSkip').addEventListener('click', skipCurrent);
     $('btnUndo').addEventListener('click', undoLast);
     $('btnPrevOrder').addEventListener('click', prevOrder);
     $('btnNextOrder').addEventListener('click', nextOrder);
 
-    // Tap next cards to jump (optional)
     $('next1').addEventListener('click', ()=> jumpNext(1));
     $('next2').addEventListener('click', ()=> jumpNext(2));
 
