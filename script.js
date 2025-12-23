@@ -1,49 +1,67 @@
-/* =========================================================
-   CONFIG
-   ========================================================= */
+// =========================================================
+// CONFIG
+// =========================================================
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const sheetName = 'Orders';
 const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 
-// Orders sheet expects headers in row1 like:
-// orderId, customerName, address, itemTitle, variantTitle, qty, picked, notes, imageUrl
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
-// Optional: image lookup sheet (A=title, B=imageUrl).
 const imageLookupUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('ImageLookup!A2:B')}?alt=json&key=${apiKey}`;
 
-/* =========================================================
-   DOM
-   ========================================================= */
+// =========================================================
+// DOM
+// =========================================================
 const $ = id => document.getElementById(id);
 
-/* =========================================================
-   STATE
-   ========================================================= */
-let MODE = 'pack'; // 'picker' or 'pack'
-let rawRows = [];
+// =========================================================
+// STATE
+// =========================================================
+let MODE = 'pack';
 let imageMap = new Map();
-
-let orders = [];         // [{orderId, customerName, address, items:[...] }]
+let orders = [];
 let orderIndex = 0;
-
-let pickQueue = [];      // one-item-at-a-time queue for current order
+let pickQueue = [];
 let pickIndex = 0;
 
-const STORAGE_KEY = 'dw_picked_v1';
+const STORAGE_KEY = 'dw_picked_v2';
 
-/* =========================================================
-   UTIL
-   ========================================================= */
-function safe(s){ return (s ?? '').toString().trim(); }
+// =========================================================
+// HELPERS
+// =========================================================
+const REQUIRED_HEADERS = [
+  'orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'
+];
+
+function safe(v){ return (v ?? '').toString().trim(); }
+
+function setError(msg){
+  const box = $('errBox');
+  box.innerHTML = msg ? `<div class="error">${msg}</div>` : '';
+}
+
+function normalizeText(s){
+  return safe(s)
+    .toLowerCase()
+    .replace(/\(non-alcoholic\)/g,'')
+    .replace(/[^a-z0-9]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
 
 function normalizeKey(title, variant){
-  // Merge duplicates by: title + variant (so different formats do NOT merge)
-  const t = safe(title).toLowerCase().replace(/\s+/g,' ').trim();
-  const v = safe(variant).toLowerCase().replace(/\s+/g,' ').trim();
-  return (t + '|' + v);
+  return normalizeText(title) + '|' + normalizeText(variant);
+}
+
+function toIntQty(x){
+  const n = parseInt(safe(x).replace(/[^\d-]/g,''), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function canLabel(n){
+  return n === 1 ? '1 can' : `${n} cans`;
 }
 
 function firstNameInitial(fullName){
@@ -55,7 +73,6 @@ function firstNameInitial(fullName){
 }
 
 function cityProvince(address){
-  // Best effort parse: expects "street, City, Province, Country"
   const a = safe(address);
   if(!a) return '—';
   const parts = a.split(',').map(x => x.trim()).filter(Boolean);
@@ -65,107 +82,123 @@ function cityProvince(address){
 }
 
 function loadPicked(){
-  try{
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-  }catch(e){ return {}; }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { return {}; }
 }
-
 function savePicked(obj){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
 }
 
-function setError(msg){
-  const box = $('errBox');
-  box.innerHTML = msg ? `<div class="error">${msg}</div>` : '';
-}
-
-/* =========================================================
-   WAREHOUSE LOCATION LOGIC (SIMPLE BUT RELIABLE)
-   ========================================================= */
 function guessAisle(title){
+  // Keep it simple + predictable. Replace with your real aisle map later.
   const t = safe(title).toUpperCase();
   const ch = (t.match(/[A-Z]/) || ['?'])[0];
-
-  // Aisle 1: A–H, Aisle 2: I–Q, Aisle 3: R–Z
   if(ch >= 'A' && ch <= 'H') return 'Aisle 1';
   if(ch >= 'I' && ch <= 'Q') return 'Aisle 2';
   if(ch >= 'R' && ch <= 'Z') return 'Aisle 3';
   return 'Aisle ?';
 }
 
-/* =========================================================
-   FETCH + PARSE
-   ========================================================= */
 async function fetchJson(url){
   const res = await fetch(url);
   if(!res.ok) throw new Error(`Fetch failed: ${res.status}`);
   return res.json();
 }
 
-function rowsToObjects(values){
-  if(!values || !values.length) return [];
-  const headers = values[0].map(h => safe(h));
-  const out = [];
-  for(let i=1;i<values.length;i++){
-    const row = values[i];
-    const obj = {};
-    headers.forEach((h, idx) => obj[h] = row[idx] ?? '');
-    if(safe(obj.orderId) || safe(obj.itemTitle) || safe(obj.customerName)) out.push(obj);
-  }
-  return out;
+// =========================================================
+// PARSE ORDERS SHEET SAFELY
+// =========================================================
+function buildHeaderMap(headerRow){
+  const map = {};
+  headerRow.forEach((h, idx)=>{
+    const key = normalizeText(h);
+    if(key) map[key] = idx;
+  });
+  return map;
 }
 
+function validateHeaders(hmap){
+  const missing = REQUIRED_HEADERS.filter(h => !(h in hmap));
+  return missing;
+}
+
+function rowObj(row, hmap){
+  // Map required headers safely, even if columns are reordered
+  const get = key => row[hmap[key]] ?? '';
+  return {
+    orderId: safe(get('orderid')),
+    customerName: safe(get('customername')),
+    address: safe(get('address')),
+    itemTitle: safe(get('itemtitle')),
+    variantTitle: safe(get('varianttitle')),
+    qty: toIntQty(get('qty')),
+    picked: safe(get('picked')).toLowerCase() === 'true' || safe(get('picked')) === '1',
+    notes: safe(get('notes')),
+    imageUrl: safe(get('imageurl')),
+  };
+}
+
+function isGarbageRow(r){
+  // Drop blank rows or header-repeat rows
+  if(!r.orderId && !r.itemTitle && !r.customerName) return true;
+  if(normalizeText(r.itemTitle) === 'itemtitle') return true;
+  return false;
+}
+
+// =========================================================
+// IMAGE LOOKUP (NORMALIZED MATCHING)
+// =========================================================
 async function loadImageLookup(){
   try{
     const j = await fetchJson(imageLookupUrl);
     const vals = j.values || [];
     vals.forEach(r=>{
-      const k = safe(r[0]);
-      const v = safe(r[1]);
-      if(k && v) imageMap.set(k.toLowerCase().trim(), v);
+      const title = normalizeText(r[0]);
+      const url = safe(r[1]);
+      if(title && url) imageMap.set(title, url);
     });
-  }catch(e){
-    // Optional; ignore if missing
+  }catch{
+    // optional
   }
 }
 
-function resolveImage(item){
-  // Priority: row imageUrl -> image lookup by itemTitle -> placeholder
-  const direct = safe(item.imageUrl);
-  if(direct) return direct;
-
-  const key = safe(item.itemTitle).toLowerCase().trim();
-  if(key && imageMap.has(key)) return imageMap.get(key);
-
+function placeholderSvg(title){
+  const t = safe(title).slice(0,28);
   return `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(`
     <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
       <rect width="100%" height="100%" fill="#f3f4f6"/>
       <text x="50%" y="48%" text-anchor="middle" font-family="Arial" font-size="18" fill="#6b7280" font-weight="700">NO IMAGE</text>
-      <text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="12" fill="#9ca3af" font-weight="700">${safe(item.itemTitle).slice(0,22)}</text>
+      <text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="12" fill="#9ca3af" font-weight="700">${t}</text>
     </svg>
   `);
 }
 
-/* =========================================================
-   NORMALIZE (MERGE DUPLICATES SAFELY)
-   ========================================================= */
+function resolveImage(item){
+  if(item.imageUrl) return item.imageUrl;
+  const key = normalizeText(item.itemTitle);
+  if(key && imageMap.has(key)) return imageMap.get(key);
+  return placeholderSvg(item.itemTitle);
+}
+
+// =========================================================
+// BUILD ORDERS + MERGE DUPLICATES
+// =========================================================
 function buildOrders(rows){
   const byOrder = new Map();
 
   rows.forEach(r=>{
-    const orderId = safe(r.orderId);
-    if(!orderId) return;
+    if(!r.orderId) return;
 
-    if(!byOrder.has(orderId)){
-      byOrder.set(orderId, {
-        orderId,
-        customerName: safe(r.customerName),
-        address: safe(r.address),
-        notes: safe(r.notes),
+    if(!byOrder.has(r.orderId)){
+      byOrder.set(r.orderId, {
+        orderId: r.orderId,
+        customerName: r.customerName,
+        address: r.address,
+        notes: r.notes,
         itemsRaw: []
       });
     }
-    byOrder.get(orderId).itemsRaw.push(r);
+    byOrder.get(r.orderId).itemsRaw.push(r);
   });
 
   const out = [];
@@ -173,31 +206,26 @@ function buildOrders(rows){
     const merged = new Map();
 
     o.itemsRaw.forEach(r=>{
-      const title = safe(r.itemTitle);
-      const variant = safe(r.variantTitle);
-      const qty = Number(r.qty || 0) || 0;
-      const key = normalizeKey(title, variant);
+      const key = normalizeKey(r.itemTitle, r.variantTitle);
+      if(!key.trim() || r.qty <= 0) return;
 
       if(!merged.has(key)){
         merged.set(key, {
-          itemTitle: title,
-          variantTitle: variant,
+          itemTitle: r.itemTitle,
+          variantTitle: r.variantTitle,
           qty: 0,
-          imageUrl: safe(r.imageUrl),
-          aisle: guessAisle(title),
+          imageUrl: r.imageUrl,
+          aisle: guessAisle(r.itemTitle),
           picked: false
         });
       }
-
       const it = merged.get(key);
-      it.qty += qty;
-
-      if(!it.imageUrl && safe(r.imageUrl)) it.imageUrl = safe(r.imageUrl);
+      it.qty += r.qty;
+      if(!it.imageUrl && r.imageUrl) it.imageUrl = r.imageUrl;
     });
 
     const items = Array.from(merged.values())
-      .filter(x => x.qty > 0)
-      .map(x => ({ ...x, imageResolved: resolveImage(x) }))
+      .map(it => ({ ...it, imageResolved: resolveImage(it) }))
       .sort((a,b)=>{
         const aa = a.aisle.localeCompare(b.aisle);
         if(aa !== 0) return aa;
@@ -213,13 +241,11 @@ function buildOrders(rows){
     });
   }
 
+  // newest-ish first by orderId (string compare)
   out.sort((a,b)=> (a.orderId > b.orderId ? -1 : 1));
   return out;
 }
 
-/* =========================================================
-   PICKED STATE (LOCAL)
-   ========================================================= */
 function applyPickedState(){
   const picked = loadPicked();
   orders.forEach(o=>{
@@ -243,9 +269,9 @@ function setItemPicked(orderId, item, val){
   if(target) target.picked = !!val;
 }
 
-/* =========================================================
-   UI RENDER
-   ========================================================= */
+// =========================================================
+// UI (uses your existing HTML/CSS structure)
+// =========================================================
 function currentOrder(){ return orders[orderIndex]; }
 
 function calcTotals(order){
@@ -258,7 +284,7 @@ function boxesRequired(totalCans){
   if(totalCans <= 0) return '0';
   const full24 = Math.floor(totalCans / 24);
   const rem = totalCans % 24;
-  let parts = [];
+  const parts = [];
   if(full24) parts.push(`${full24}×24-pack`);
   if(rem) parts.push(`1×${rem}-pack`);
   return parts.join(' + ');
@@ -296,6 +322,22 @@ function buildPickQueue(){
   pickIndex = 0;
 }
 
+function escapeHtml(str){
+  return (str ?? '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+function escapeAttr(str){ return escapeHtml(str).replaceAll('"','&quot;'); }
+
+function openImgModal(item){
+  $('imgModalImg').src = item.imageResolved;
+  $('imgModalCap').textContent = item.itemTitle;
+  $('imgModal').classList.add('show');
+}
+
 function render(){
   setError('');
 
@@ -303,7 +345,7 @@ function render(){
   if(!o){
     $('panelTitle').textContent = 'No orders found';
     $('panelSub').textContent = '';
-    $('panelBody').innerHTML = `<div class="empty">Your sheet returned no valid orders.</div>`;
+    $('panelBody').innerHTML = `<div class="empty">No valid orders in sheet.</div>`;
     $('navRow').style.display='none';
     $('orderStrip').style.display='none';
     return;
@@ -364,7 +406,7 @@ function render(){
 
         <div class="confirmRow">
           <button class="btn btnWide ok" id="btnConfirmPick">CONFIRM PICK</button>
-          <button class="btn btnWide danger" id="btnSkipPick">SKIP (leave unpicked)</button>
+          <button class="btn btnWide danger" id="btnSkipPick">SKIP</button>
         </div>
       </div>
     `;
@@ -388,7 +430,7 @@ function render(){
 
     const rows = o.items.map(it=>{
       const done = it.picked ? 'done' : '';
-      const label = it.picked ? 'PICKED' : `${it.qty} cans`;
+      const label = it.picked ? 'PICKED' : canLabel(it.qty);
       return `
         <div class="row" data-key="${escapeAttr(normalizeKey(it.itemTitle,it.variantTitle))}">
           <div class="thumb"><img src="${it.imageResolved}" alt="${escapeHtml(it.itemTitle)}"></div>
@@ -430,69 +472,57 @@ function setMode(m){
   render();
 }
 
-/* =========================================================
-   IMAGE MODAL
-   ========================================================= */
-function openImgModal(item){
-  $('imgModalImg').src = item.imageResolved;
-  $('imgModalCap').textContent = item.itemTitle;
-  $('imgModal').classList.add('show');
-}
-
+// Modal close
 $('imgModal').addEventListener('click', (e)=>{
   if(e.target.id === 'imgModal') $('imgModal').classList.remove('show');
 });
 
-/* =========================================================
-   ORDER STRIP TOGGLE
-   ========================================================= */
+// Strip toggle
 $('orderStripTop').addEventListener('click', ()=>{
   const d = $('orderStripDetail');
   const open = d.classList.toggle('show');
   $('stripCaret').textContent = open ? '▴' : '▾';
 });
 
-/* =========================================================
-   HTML ESCAPE
-   ========================================================= */
-function escapeHtml(str){
-  return (str ?? '').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#039;");
-}
-function escapeAttr(str){ return escapeHtml(str).replaceAll('"','&quot;'); }
-
-/* =========================================================
-   INIT
-   ========================================================= */
+// =========================================================
+// INIT
+// =========================================================
 async function init(){
   try{
     $('btnPicker').addEventListener('click', ()=> setMode('picker'));
     $('btnPack').addEventListener('click', ()=> setMode('pack'));
-
-    // Start in Pack Mode (safer)
     $('btnPicker').classList.add('secondary');
 
     await loadImageLookup();
 
     const j = await fetchJson(ordersUrl);
-    rawRows = rowsToObjects(j.values || []);
-    orders = buildOrders(rawRows);
+    const values = j.values || [];
+    if(values.length < 2) throw new Error('Orders sheet has no data.');
 
+    const headerRow = values[0];
+    const hmap = buildHeaderMap(headerRow);
+    const missing = validateHeaders(hmap);
+    if(missing.length){
+      throw new Error(`Orders sheet headers missing: ${missing.join(', ')}`);
+    }
+
+    const rows = values.slice(1)
+      .map(r => rowObj(r, hmap))
+      .filter(r => !isGarbageRow(r));
+
+    orders = buildOrders(rows);
     applyPickedState();
 
     if(!orders.length){
-      setError('No orders found. Confirm your Orders sheet headers + data.');
+      setError('No valid orders built. Check orderId + itemTitle + qty columns.');
     }
 
     setMode('pack');
   }catch(e){
-    setError(`Error loading sheet. ${e.message}`);
+    setError(e.message);
     $('panelTitle').textContent = 'Error';
-    $('panelBody').innerHTML = `<div class="empty">Could not load data.</div>`;
+    $('panelBody').innerHTML = `<div class="empty">Fix the sheet headers/data and reload.</div>`;
+    $('navRow').style.display='none';
   }
 }
 
