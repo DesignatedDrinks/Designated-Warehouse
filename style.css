@@ -171,7 +171,28 @@ body{
   color:var(--purple);
 }
 
-/* NEXT ROW (ALWAYS VISIBLE) */
+/* BIG IMAGE (VISIBLE + CAPPED) */
+.imgWrap{
+  margin:0 14px 10px;
+  border:1px solid var(--line);
+  border-radius:22px;
+  background:#fff;
+  padding:10px;
+  display:grid;
+  place-items:center;
+}
+.bigImg{ padding:12px; }
+.imgWrap img{
+  width:100%;
+  max-width:420px;
+  height:auto;
+  max-height:38vh;      /* keeps it visible without pushing everything away */
+  object-fit:contain;
+  border-radius:16px;
+  display:block;
+}
+
+/* NEXT ROW (COMPACT) */
 .nextRow{
   display:grid;
   grid-template-columns: 1fr 1fr;
@@ -182,8 +203,8 @@ body{
   appearance:none;
   -webkit-appearance:none;
   text-align:left;
-  padding:12px;
-  border-radius:22px;
+  padding:10px;
+  border-radius:20px;
   background:#fff;
   border:1px solid #f0f0f0;
   box-shadow:var(--shadow);
@@ -196,7 +217,7 @@ body{
   justify-content:space-between;
   align-items:center;
   gap:8px;
-  margin-bottom:10px;
+  margin-bottom:8px;
 }
 .nextTap .miniQty{
   font-weight:1200;
@@ -223,44 +244,13 @@ body{
   padding:8px;
   display:grid;
   place-items:center;
-  margin-bottom:10px;
-  min-height:110px;
+  min-height:86px;
 }
 .miniThumb img{
   width:100%;
-  max-width:160px;
+  max-width:150px;
   height:auto;
   border-radius:14px;
-  display:block;
-}
-.miniTitle{
-  font-weight:1100;
-  font-size:12px;
-  line-height:1.15;
-  overflow:hidden;
-  display:-webkit-box;
-  -webkit-line-clamp:3;
-  -webkit-box-orient:vertical;
-}
-
-/* BIG IMAGE (CAPPED HEIGHT SO NEXT CARDS DON'T DISAPPEAR) */
-.imgWrap{
-  margin:0 14px 10px;
-  border:1px solid var(--line);
-  border-radius:22px;
-  background:#fff;
-  padding:10px;
-  display:grid;
-  place-items:center;
-}
-.bigImg{ padding:12px; }
-.imgWrap img{
-  width:100%;
-  max-width:420px;
-  height:auto;
-  max-height:42vh;
-  object-fit:contain;
-  border-radius:16px;
   display:block;
 }
 
