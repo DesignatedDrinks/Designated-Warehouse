@@ -232,27 +232,20 @@ body{
   font-size:11px;
 }
 
-/* ✅ shared breathing animation (apply to qty + next button) */
-@keyframes breatheGlow {
+/* ✅ qty breathing only */
+@keyframes qtyBreathe {
   0% {
     transform: scale(1);
     box-shadow: 0 0 0 rgba(91,47,214,0.0);
-    filter: saturate(1);
   }
   50% {
-    transform: scale(1.03);
+    transform: scale(1.05);
     box-shadow: 0 0 14px rgba(91,47,214,0.18);
-    filter: saturate(1.08);
   }
   100% {
     transform: scale(1);
     box-shadow: 0 0 0 rgba(91,47,214,0.0);
-    filter: saturate(1);
   }
-}
-
-.breathe{
-  animation: breatheGlow 2.6s ease-in-out infinite;
 }
 
 .qtyBig{
@@ -268,8 +261,12 @@ body{
   color:var(--purple);
 }
 
+.qtyBreathe{
+  animation: qtyBreathe 2.6s ease-in-out infinite;
+}
+
 /* =====================
-   HERO PICK (CAN LEFT, NEXT RIGHT)
+   HERO PICK
 ===================== */
 .heroPick{
   display:grid;
@@ -287,8 +284,6 @@ body{
   display:grid;
   place-items:center;
 }
-
-.heroImg{ margin:0; }
 
 .imgWrap img{
   width:100%;
