@@ -19,7 +19,7 @@ let queueIndex = 0;
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v1';
 
-let donePromptTimer = null; // ✅ for 1.5s next-order prompt
+let donePromptTimer = null;
 
 // =========================================================
 // UTILS
@@ -138,7 +138,7 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// AISLE PATH (placeholder map)
+// AISLE PATH (placeholder)
 // =========================================================
 function guessAisle(title){
   const t = safe(title).toUpperCase();
@@ -169,7 +169,7 @@ function setPicked(orderId, key, val){
 }
 
 // =========================================================
-// BOX BREAKDOWN (24 / 12 / 6) — total cans
+// BOX BREAKDOWN (24 / 12 / 6)
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -254,6 +254,7 @@ function buildOrders(rows){
 
   const out = [];
   for(const o of byOrder.values()){
+    // combine duplicates by itemTitle into TOTAL CANS
     const merged = new Map();
 
     for(const r of o.itemsRaw){
@@ -277,6 +278,7 @@ function buildOrders(rows){
 
       const item = merged.get(k);
 
+      // prefer real image over placeholder
       if(item.imageResolved.startsWith('data:image') && r.imageUrl && r.imageUrl.startsWith('http')){
         item.imageResolved = r.imageUrl;
       }
@@ -415,7 +417,7 @@ function renderCurrent(){
   const o = currentOrder();
   const nextPickBtn = $('btnPickNext');
 
-  clearDonePrompt(); // ✅ always clear when rendering a normal state
+  clearDonePrompt();
 
   if(!o){
     if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
@@ -435,7 +437,6 @@ function renderCurrent(){
   const cur = queue[queueIndex];
 
   if(!cur){
-    // DONE STATE
     if(nextPickBtn) nextPickBtn.style.visibility = 'hidden';
 
     $('curTitle').textContent = 'DONE — order picked';
@@ -446,7 +447,6 @@ function renderCurrent(){
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
 
-    // ✅ after 1.5s, make NEXT ORDER breathe and bring it into view
     donePromptTimer = setTimeout(()=>{
       const nextOrderBtn = $('btnNextOrder');
       if(nextOrderBtn){
@@ -458,7 +458,6 @@ function renderCurrent(){
     return;
   }
 
-  // NORMAL PICKING
   if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
 
   $('curTitle').textContent = cur.itemTitle;
@@ -548,16 +547,39 @@ function nextOrder(){
   }
 }
 
+// RESET CURRENT ORDER (local-only)
+function resetThisOrder(){
+  const o = currentOrder();
+  if(!o) return;
+
+  const ok = confirm(
+    `Reset picked progress for Order #${o.orderId}?\n\nThis clears picked status on this device only (does not change the sheet).`
+  );
+  if(!ok) return;
+
+  const p = loadPicked();
+  delete p[o.orderId];
+  savePicked(p);
+
+  undoStack = [];
+  queueIndex = 0;
+
+  clearDonePrompt();
+  renderAll();
+
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+}
+
 // =========================================================
 // INIT
 // =========================================================
 async function init(){
   try{
-    // wire buttons safely
     $('btnSkip')?.addEventListener('click', skipCurrent);
     $('btnUndo')?.addEventListener('click', undoLast);
     $('btnPrevOrder')?.addEventListener('click', prevOrder);
     $('btnNextOrder')?.addEventListener('click', nextOrder);
+    $('btnResetOrder')?.addEventListener('click', resetThisOrder);
 
     $('btnPickNext')?.addEventListener('click', pickCurrent);
 
