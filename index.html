@@ -4,39 +4,115 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="/Designated-Warehouse/style.css" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
 
-<header class="top">
-  <div class="topRow">
-    <div class="brand">Designated <span>Warehouse</span></div>
-    <div class="orderNav">
-      <button id="btnPrevOrder" class="btn secondary">← Prev</button>
-      <button id="btnNextOrder" class="btn secondary">Next →</button>
-    </div>
-  </div>
-</header>
+  <header class="top">
+    <div class="topRow">
+      <div class="brand">Designated <span>Warehouse</span></div>
 
-<main class="wrap">
-  <div class="card">
-    <div class="cardHead">
-      <div>
-        <div id="curTitle">Loading…</div>
-        <div id="curSub"></div>
+      <div class="orderNav">
+        <button id="btnPrevOrder" class="btn secondary" type="button">← Prev</button>
+        <button id="btnNextOrder" class="btn secondary" type="button">Next →</button>
+      </div>
+    </div>
+
+    <div id="orderCard" class="orderCard" style="display:none;">
+      <div class="orderMain">
+        <div class="who">
+          <div id="whoLine" class="whoLine">—</div>
+          <div id="addrLine" class="addrLine">—</div>
+        </div>
+
+        <div class="chips">
+          <div class="chip" id="chipOrder">#—</div>
+          <div class="chip" id="chipBoxes">Boxes: —</div>
+          <div class="chip" id="chipProgress">0%</div>
+        </div>
       </div>
 
-      <!-- 🔴 qty is red + breathing -->
-      <div class="qtyBig" id="curQty">—</div>
-    </div>
+      <div class="progressWrap">
+        <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
+        <div class="progressMeta">
+          <div id="progressLeft">0 picked</div>
+          <div id="progressRight">0 total</div>
+        </div>
+      </div>
 
-    <div class="heroPick">
-      <img id="curImg" />
-      <button id="btnPickNext" class="btn secondary">Next →</button>
+      <div id="errBox"></div>
     </div>
-  </div>
-</main>
+  </header>
 
-<script src="/Designated-Warehouse/script.js"></script>
+  <main class="wrap">
+    <section class="deck">
+
+      <div class="card current">
+        <div class="cardHead">
+          <div class="cardText">
+            <div class="title" id="curTitle">Loading…</div>
+            <div class="sub" id="curSub">—</div>
+          </div>
+
+          <!-- ✅ qty breathes + RED -->
+          <div class="qtyBig qtyBreathe" id="curQty">—</div>
+        </div>
+
+        <div class="heroPick">
+          <div class="imgWrap heroImg">
+            <img id="curImg" alt="Current item image" />
+          </div>
+
+          <div class="heroSide">
+            <!-- ✅ does NOT breathe -->
+            <button id="btnPickNext" class="btn heroNext secondary" type="button">
+              Next →
+            </button>
+            <div class="heroHint">Tap once per item</div>
+          </div>
+        </div>
+
+        <div class="nextRow">
+          <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
+            <div class="miniTop">
+              <div class="miniQty" id="n1Qty">—</div>
+              <div class="miniAisle" id="n1Aisle">—</div>
+            </div>
+            <div class="miniThumb">
+              <img id="n1Img" alt="Next item image 1" />
+            </div>
+          </button>
+
+          <button class="card nextTap" id="next2" type="button" aria-label="Next item 2">
+            <div class="miniTop">
+              <div class="miniQty" id="n2Qty">—</div>
+              <div class="miniAisle" id="n2Aisle">—</div>
+            </div>
+            <div class="miniThumb">
+              <img id="n2Img" alt="Next item image 2" />
+            </div>
+          </button>
+        </div>
+
+        <div class="actions">
+          <div class="row2">
+            <button id="btnSkip" class="btn big secondary" type="button">Skip</button>
+            <button id="btnUndo" class="btn big danger" type="button">Undo last</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="listWrap">
+        <div class="listHeader">
+          <div class="listTitle">Order list</div>
+          <div class="listHint">Tap a row to jump (optional)</div>
+        </div>
+        <div id="listBody" class="listBody"></div>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="./script.js"></script>
 </body>
 </html>
