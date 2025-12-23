@@ -9,7 +9,7 @@ const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName + '!A1:Z10000')}?alt=json&key=${apiKey}`;
 
-// Image lookup (title -> url) from SAME sheet: ImageLookup!A2:B
+// Image lookup (title -> url) from SAME spreadsheet
 const imageLookupUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('ImageLookup!A2:B')}?alt=json&key=${apiKey}`;
 
@@ -26,7 +26,7 @@ const el = {
   completeView: $('completeView'),
   packModeView: $('packModeView'),
 
-  // nav buttons (some may not exist in your HTML — this code won’t crash)
+  // nav buttons (may/may not exist — safe)
   goStartBtn: $('goStartBtn'),
   goPackModeBtn: $('goPackModeBtn'),
   backToStartBtn: $('backToStartBtn'),
@@ -42,7 +42,7 @@ const el = {
   pickProgress: $('pickProgress'),
   pickImage: $('pickImage'),
   pickName: $('pickName'),
-  pickQty: $('pickQty'),              // if you use class .pick-qty, we also support it below
+  pickQty: $('pickQty'), // if you use .pick-qty class, we support below
   confirmPickBtn: $('confirmPickBtn'),
 
   // complete
@@ -57,10 +57,10 @@ const el = {
   packCustomerName: $('packCustomerName'),
   packCustomerAddress: $('packCustomerAddress'),
   packBoxesInfo: $('packBoxesInfo'),
-  packItemsContainer: $('packItemsContainer'), // if missing, we also try .items-list
+  packItemsContainer: $('packItemsContainer'), // if missing we try fallbacks
 };
 
-// fallback selectors (for when your HTML doesn’t match IDs perfectly)
+// fallback selectors (in case your HTML differs)
 function getPickQtyEl() {
   return el.pickQty || document.querySelector('.pick-qty');
 }
@@ -71,8 +71,8 @@ function getPackItemsContainer() {
 // ==================================================
 // STATE
 // ==================================================
-let orders = [];         // order-centric (pack mode)
-let pickQueue = [];      // aggregated items (pick mode)
+let orders = [];          // order-centric (pack mode)
+let pickQueue = [];       // aggregated items (pick mode)
 let pickIndex = 0;
 let packIndex = 0;
 
@@ -117,22 +117,61 @@ function safeSetImg(imgEl, url, placeholderSize = 600) {
   imgEl.src = url || placeholderImgUrl(placeholderSize);
 }
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 // ==================================================
-// LOCATION LOGIC (LETTER ONLY + YOUR WALK ORDER)
+// LOCATION LOGIC (AISLE-FIRST + LETTER ONLY)
 // ==================================================
 function guessLocation(title) {
   const raw = String(title || '').trim();
   const L = (raw[0] || '').toUpperCase();
   const t = raw.toLowerCase();
 
-  // Pinned exceptions (your reality)
-  if (t.includes('harmon')) return { label: 'H', sortKey: '00-00' };
-  if (t.includes('templ'))  return { label: 'T', sortKey: '00-01' };
+  // Hard pins (your physical exceptions)
+  // Keep these in Aisle 1 so they get picked early unless you say otherwise.
+  if (t.includes('harmon')) return { aisle: 1, label: 'H', sortKey: '01-00' };
+  if (t.includes('templ'))  return { aisle: 1, label: 'T', sortKey: '01-01' };
 
-  // Groups in physical walk order
-  const A1_WALL_GROUPS = [['B'], ['D'], ['C']];
-  const A1_ISLAND_GROUPS = [['O'], ['M','N'], ['L'], ['I','J'], ['H'], ['G'], ['F'], ['E']];
-  const A2_LEFT_GROUPS = [['P'], ['R'], ['S'], ['T'], ['U','W']];
+  // ----------------------------
+  // AISLE 1 (both-side picking)
+  // ----------------------------
+
+  // Aisle 1 WALL groups: B → D → C
+  const A1_WALL = [
+    ['B'],
+    ['D'],
+    ['C'],
+  ];
+
+  // Aisle 1 ISLAND groups: O → (M/N) → L → (I/J) → H → G → F → E
+  const A1_ISLAND = [
+    ['O'],
+    ['M','N'],
+    ['L'],
+    ['I','J'],
+    ['H'],
+    ['G'],
+    ['F'],
+    ['E'],
+  ];
+
+  // ----------------------------
+  // AISLE 2 (one-side picking)
+  // ----------------------------
+  const A2_ONE_SIDE = [
+    ['P'],
+    ['R'],
+    ['S'],
+    ['T'],
+    ['U','W'],
+  ];
 
   const rankIn = (groups) => {
     for (let i = 0; i < groups.length; i++) {
@@ -141,15 +180,23 @@ function guessLocation(title) {
     return -1;
   };
 
-  const wallRank   = rankIn(A1_WALL_GROUPS);
-  const islandRank = rankIn(A1_ISLAND_GROUPS);
-  const a2Rank     = rankIn(A2_LEFT_GROUPS);
+  const a1WallRank = rankIn(A1_WALL);
+  if (a1WallRank !== -1) {
+    return { aisle: 1, label: L, sortKey: `01-10-${String(a1WallRank).padStart(2,'0')}` };
+  }
 
-  if (wallRank !== -1)   return { label: L, sortKey: `01-0${wallRank}` };
-  if (islandRank !== -1) return { label: L, sortKey: `01-1${islandRank}` };
-  if (a2Rank !== -1)     return { label: L, sortKey: `02-0${a2Rank}` };
+  const a1IslandRank = rankIn(A1_ISLAND);
+  if (a1IslandRank !== -1) {
+    return { aisle: 1, label: L, sortKey: `01-20-${String(a1IslandRank).padStart(2,'0')}` };
+  }
 
-  return { label: L || '?', sortKey: '99-99' }; // never show "UNKNOWN"
+  const a2Rank = rankIn(A2_ONE_SIDE);
+  if (a2Rank !== -1) {
+    return { aisle: 2, label: L, sortKey: `02-10-${String(a2Rank).padStart(2,'0')}` };
+  }
+
+  // Silent fallback: still usable, never show "UNKNOWN"
+  return { aisle: 9, label: L || '?', sortKey: '99-99-99' };
 }
 
 // ==================================================
@@ -204,11 +251,10 @@ async function loadOrders() {
     const iPicked       = idx('picked');   // optional
     const iNotes        = idx('notes');    // optional
     const iImageUrl     = idx('imageurl'); // optional
-    const iImageAlt     = idx('image');    // optional column name
+    const iImageAlt     = idx('image');    // optional
 
-    if (iItemTitle === -1 || iQty === -1) {
-      throw new Error('Missing required columns: itemTitle and qty');
-    }
+    if (iOrderId === -1) throw new Error('Missing required column: orderId');
+    if (iItemTitle === -1 || iQty === -1) throw new Error('Missing required columns: itemTitle and qty');
 
     const grouped = new Map(); // orderId -> order object
 
@@ -217,13 +263,14 @@ async function loadOrders() {
       const isPicked = pickedVal === 'true' || pickedVal === 'yes' || pickedVal === '1';
       if (iPicked >= 0 && isPicked) continue;
 
-      const orderId = (iOrderId >= 0 ? r[iOrderId] : '').toString().trim();
+      const orderId = (r[iOrderId] || '').toString().trim();
       const itemTitle = (r[iItemTitle] || '').toString().trim();
       const variantTitle = (iVariantTitle >= 0 ? (r[iVariantTitle] || '').toString() : '');
       const qty = parseInt(r[iQty], 10) || 0;
 
       if (!orderId || !itemTitle || qty <= 0) continue;
 
+      // pack size -> cans
       const packSizeMatch = String(variantTitle || '').match(/(\d+)\s*pack/i);
       const packSize = packSizeMatch ? parseInt(packSizeMatch[1], 10) : 1;
       const cans = qty * (packSize || 1);
@@ -299,6 +346,7 @@ function buildPickQueue(orderList) {
     if (sa !== sb) return sa.localeCompare(sb);
     return a.itemTitle.localeCompare(b.itemTitle);
   });
+
   return queue;
 }
 
@@ -309,7 +357,7 @@ function renderStart() {
   showView(el.startView);
   if (el.startError) el.startError.classList.add('hidden');
 
-  setText(el.dashPending, orders.length);
+  setText(el.dashPending, orders.length); // real orders
   setText(el.dashCans, pickQueue.reduce((s, it) => s + (it.cans || 0), 0));
 }
 
@@ -365,7 +413,7 @@ function renderComplete() {
 }
 
 // ==================================================
-// PACK MODE (UI WORKING)
+// PACK MODE
 // ==================================================
 function goPackMode() {
   showView(el.packModeView);
@@ -404,7 +452,6 @@ function calculateBoxes(n) {
 function renderPackOrder() {
   if (!orders.length) return;
 
-  // clamp
   if (packIndex < 0) packIndex = 0;
   if (packIndex > orders.length - 1) packIndex = orders.length - 1;
 
@@ -463,15 +510,6 @@ function renderPackOrder() {
   }
 
   container.appendChild(frag);
-}
-
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
 }
 
 // ==================================================
