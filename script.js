@@ -1,534 +1,499 @@
-// ==================================================
-// CONFIG (YOUR APIS)
-// ==================================================
+/* =========================================================
+   CONFIG
+   ========================================================= */
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const sheetName = 'Orders';
 const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 
-// Orders range (header + rows)
+// Orders sheet expects headers in row1 like:
+// orderId, customerName, address, itemTitle, variantTitle, qty, picked, notes, imageUrl
 const ordersUrl =
-  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName + '!A1:Z10000')}?alt=json&key=${apiKey}`;
+  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
-// Image lookup (title -> url) from SAME spreadsheet
+// Optional: image lookup sheet (A=title, B=imageUrl).
 const imageLookupUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent('ImageLookup!A2:B')}?alt=json&key=${apiKey}`;
 
-// ==================================================
-// DOM SAFE
-// ==================================================
-const $ = (id) => document.getElementById(id);
-const on = (node, evt, fn) => { if (node) node.addEventListener(evt, fn); };
+/* =========================================================
+   DOM
+   ========================================================= */
+const $ = id => document.getElementById(id);
 
-const el = {
-  // views
-  startView: $('startView'),
-  pickView: $('pickView'),
-  completeView: $('completeView'),
-  packModeView: $('packModeView'),
+/* =========================================================
+   STATE
+   ========================================================= */
+let MODE = 'pack'; // 'picker' or 'pack'
+let rawRows = [];
+let imageMap = new Map();
 
-  // nav buttons (may/may not exist — safe)
-  goStartBtn: $('goStartBtn'),
-  goPackModeBtn: $('goPackModeBtn'),
-  backToStartBtn: $('backToStartBtn'),
+let orders = [];         // [{orderId, customerName, address, items:[...] }]
+let orderIndex = 0;
 
-  // start dashboard
-  dashPending: $('dash-pending'),
-  dashCans: $('dash-cans'),
-  startPickingBtn: $('startPickingBtn'),
-  startError: $('startError'),
-
-  // pick mode
-  pickLocation: $('pickLocation'),
-  pickProgress: $('pickProgress'),
-  pickImage: $('pickImage'),
-  pickName: $('pickName'),
-  pickQty: $('pickQty'), // if you use .pick-qty class, we support below
-  confirmPickBtn: $('confirmPickBtn'),
-
-  // complete
-  pickedCount: $('pickedCount'),
-  issueCount: $('issueCount'),
-  goToPackBtn: $('goToPackBtn'),
-
-  // pack mode
-  packPrevBtn: $('packPrevBtn'),
-  packNextBtn: $('packNextBtn'),
-  packOrderId: $('packOrderId'),
-  packCustomerName: $('packCustomerName'),
-  packCustomerAddress: $('packCustomerAddress'),
-  packBoxesInfo: $('packBoxesInfo'),
-  packItemsContainer: $('packItemsContainer'), // if missing we try fallbacks
-};
-
-// fallback selectors (in case your HTML differs)
-function getPickQtyEl() {
-  return el.pickQty || document.querySelector('.pick-qty');
-}
-function getPackItemsContainer() {
-  return el.packItemsContainer || document.querySelector('.items-list') || document.querySelector('#packItems') || null;
-}
-
-// ==================================================
-// STATE
-// ==================================================
-let orders = [];          // order-centric (pack mode)
-let pickQueue = [];       // aggregated items (pick mode)
+let pickQueue = [];      // one-item-at-a-time queue for current order
 let pickIndex = 0;
-let packIndex = 0;
 
-let imageMap = new Map(); // normalized title -> imageUrl
+const STORAGE_KEY = 'dw_picked_v1';
 
-// ==================================================
-// VIEW CONTROL
-// ==================================================
-function showView(which) {
-  [el.startView, el.pickView, el.completeView, el.packModeView].forEach(v => v?.classList.add('hidden'));
-  which?.classList.remove('hidden');
+/* =========================================================
+   UTIL
+   ========================================================= */
+function safe(s){ return (s ?? '').toString().trim(); }
+
+function normalizeKey(title, variant){
+  // Merge duplicates by: title + variant (so different formats do NOT merge)
+  const t = safe(title).toLowerCase().replace(/\s+/g,' ').trim();
+  const v = safe(variant).toLowerCase().replace(/\s+/g,' ').trim();
+  return (t + '|' + v);
 }
 
-// ==================================================
-// HELPERS
-// ==================================================
-function setText(node, value) { if (node) node.textContent = value ?? ''; }
-
-function normalizeKey(s) {
-  return String(s || '').trim().toLowerCase();
+function firstNameInitial(fullName){
+  const n = safe(fullName);
+  if(!n) return '—';
+  const parts = n.split(/\s+/).filter(Boolean);
+  if(parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length-1][0]}.`;
 }
 
-function isLikelyUrl(s) {
-  const t = String(s || '').trim();
-  return /^https?:\/\//i.test(t) || t.startsWith('//') || /cdn\.shopify\.com/i.test(t);
+function cityProvince(address){
+  // Best effort parse: expects "street, City, Province, Country"
+  const a = safe(address);
+  if(!a) return '—';
+  const parts = a.split(',').map(x => x.trim()).filter(Boolean);
+  if(parts.length >= 3) return `${parts[1]}, ${parts[2]}`;
+  if(parts.length >= 2) return parts.slice(-2).join(', ');
+  return a;
 }
 
-function cleanUrlMaybe(s) {
-  const t = String(s || '').trim();
-  if (!t) return '';
-  if (t.startsWith('//')) return 'https:' + t;
-  return t;
+function loadPicked(){
+  try{
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  }catch(e){ return {}; }
 }
 
-function placeholderImgUrl(size = 600) {
-  return `https://via.placeholder.com/${size}x${size}?text=No+Image`;
+function savePicked(obj){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
 }
 
-function safeSetImg(imgEl, url, placeholderSize = 600) {
-  if (!imgEl) return;
-  imgEl.onerror = () => { imgEl.src = placeholderImgUrl(placeholderSize); };
-  imgEl.src = url || placeholderImgUrl(placeholderSize);
+function setError(msg){
+  const box = $('errBox');
+  box.innerHTML = msg ? `<div class="error">${msg}</div>` : '';
 }
 
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+/* =========================================================
+   WAREHOUSE LOCATION LOGIC (SIMPLE BUT RELIABLE)
+   ========================================================= */
+function guessAisle(title){
+  const t = safe(title).toUpperCase();
+  const ch = (t.match(/[A-Z]/) || ['?'])[0];
+
+  // Aisle 1: A–H, Aisle 2: I–Q, Aisle 3: R–Z
+  if(ch >= 'A' && ch <= 'H') return 'Aisle 1';
+  if(ch >= 'I' && ch <= 'Q') return 'Aisle 2';
+  if(ch >= 'R' && ch <= 'Z') return 'Aisle 3';
+  return 'Aisle ?';
 }
 
-// ==================================================
-// LOCATION LOGIC (AISLE-FIRST + LETTER ONLY)
-// ==================================================
-function guessLocation(title) {
-  const raw = String(title || '').trim();
-  const L = (raw[0] || '').toUpperCase();
-  const t = raw.toLowerCase();
+/* =========================================================
+   FETCH + PARSE
+   ========================================================= */
+async function fetchJson(url){
+  const res = await fetch(url);
+  if(!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+  return res.json();
+}
 
-  // Hard pins (your physical exceptions)
-  // Keep these in Aisle 1 so they get picked early unless you say otherwise.
-  if (t.includes('harmon')) return { aisle: 1, label: 'H', sortKey: '01-00' };
-  if (t.includes('templ'))  return { aisle: 1, label: 'T', sortKey: '01-01' };
+function rowsToObjects(values){
+  if(!values || !values.length) return [];
+  const headers = values[0].map(h => safe(h));
+  const out = [];
+  for(let i=1;i<values.length;i++){
+    const row = values[i];
+    const obj = {};
+    headers.forEach((h, idx) => obj[h] = row[idx] ?? '');
+    if(safe(obj.orderId) || safe(obj.itemTitle) || safe(obj.customerName)) out.push(obj);
+  }
+  return out;
+}
 
-  // ----------------------------
-  // AISLE 1 (both-side picking)
-  // ----------------------------
+async function loadImageLookup(){
+  try{
+    const j = await fetchJson(imageLookupUrl);
+    const vals = j.values || [];
+    vals.forEach(r=>{
+      const k = safe(r[0]);
+      const v = safe(r[1]);
+      if(k && v) imageMap.set(k.toLowerCase().trim(), v);
+    });
+  }catch(e){
+    // Optional; ignore if missing
+  }
+}
 
-  // Aisle 1 WALL groups: B → D → C
-  const A1_WALL = [
-    ['B'],
-    ['D'],
-    ['C'],
-  ];
+function resolveImage(item){
+  // Priority: row imageUrl -> image lookup by itemTitle -> placeholder
+  const direct = safe(item.imageUrl);
+  if(direct) return direct;
 
-  // Aisle 1 ISLAND groups: O → (M/N) → L → (I/J) → H → G → F → E
-  const A1_ISLAND = [
-    ['O'],
-    ['M','N'],
-    ['L'],
-    ['I','J'],
-    ['H'],
-    ['G'],
-    ['F'],
-    ['E'],
-  ];
+  const key = safe(item.itemTitle).toLowerCase().trim();
+  if(key && imageMap.has(key)) return imageMap.get(key);
 
-  // ----------------------------
-  // AISLE 2 (one-side picking)
-  // ----------------------------
-  const A2_ONE_SIDE = [
-    ['P'],
-    ['R'],
-    ['S'],
-    ['T'],
-    ['U','W'],
-  ];
+  return `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+      <rect width="100%" height="100%" fill="#f3f4f6"/>
+      <text x="50%" y="48%" text-anchor="middle" font-family="Arial" font-size="18" fill="#6b7280" font-weight="700">NO IMAGE</text>
+      <text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="12" fill="#9ca3af" font-weight="700">${safe(item.itemTitle).slice(0,22)}</text>
+    </svg>
+  `);
+}
 
-  const rankIn = (groups) => {
-    for (let i = 0; i < groups.length; i++) {
-      if (groups[i].includes(L)) return i;
+/* =========================================================
+   NORMALIZE (MERGE DUPLICATES SAFELY)
+   ========================================================= */
+function buildOrders(rows){
+  const byOrder = new Map();
+
+  rows.forEach(r=>{
+    const orderId = safe(r.orderId);
+    if(!orderId) return;
+
+    if(!byOrder.has(orderId)){
+      byOrder.set(orderId, {
+        orderId,
+        customerName: safe(r.customerName),
+        address: safe(r.address),
+        notes: safe(r.notes),
+        itemsRaw: []
+      });
     }
-    return -1;
-  };
-
-  const a1WallRank = rankIn(A1_WALL);
-  if (a1WallRank !== -1) {
-    return { aisle: 1, label: L, sortKey: `01-10-${String(a1WallRank).padStart(2,'0')}` };
-  }
-
-  const a1IslandRank = rankIn(A1_ISLAND);
-  if (a1IslandRank !== -1) {
-    return { aisle: 1, label: L, sortKey: `01-20-${String(a1IslandRank).padStart(2,'0')}` };
-  }
-
-  const a2Rank = rankIn(A2_ONE_SIDE);
-  if (a2Rank !== -1) {
-    return { aisle: 2, label: L, sortKey: `02-10-${String(a2Rank).padStart(2,'0')}` };
-  }
-
-  // Silent fallback: still usable, never show "UNKNOWN"
-  return { aisle: 9, label: L || '?', sortKey: '99-99-99' };
-}
-
-// ==================================================
-// IMAGE LOOKUP LOAD
-// ==================================================
-async function loadImageLookup() {
-  try {
-    const res = await fetch(imageLookupUrl);
-    if (!res.ok) throw new Error(`ImageLookup fetch failed (${res.status})`);
-    const json = await res.json();
-    const rows = json.values || [];
-
-    imageMap = new Map(
-      rows
-        .filter(r => r && r[0] && r[1])
-        .map(r => [normalizeKey(r[0]), cleanUrlMaybe(r[1])])
-    );
-  } catch (e) {
-    console.warn('ImageLookup failed (continuing without it):', e);
-    imageMap = new Map();
-  }
-}
-
-function getImageForTitle(itemTitle, fallbackUrlFromOrdersSheet) {
-  if (isLikelyUrl(fallbackUrlFromOrdersSheet)) return cleanUrlMaybe(fallbackUrlFromOrdersSheet);
-  return imageMap.get(normalizeKey(itemTitle)) || '';
-}
-
-// ==================================================
-// LOAD + PARSE ORDERS (HEADER-AWARE)
-// ==================================================
-async function loadOrders() {
-  try {
-    await loadImageLookup();
-
-    const res = await fetch(ordersUrl);
-    if (!res.ok) throw new Error(`Orders fetch failed (${res.status})`);
-
-    const json = await res.json();
-    const rows = json.values || [];
-    if (rows.length < 2) throw new Error('No order rows found');
-
-    const header = rows[0].map(h => String(h || '').trim().toLowerCase());
-    const idx = (name) => header.indexOf(String(name).toLowerCase());
-
-    const iOrderId      = idx('orderid');
-    const iCustomerName = idx('customername');
-    const iAddress      = idx('address');
-    const iItemTitle    = idx('itemtitle');
-    const iVariantTitle = idx('varianttitle');
-    const iQty          = idx('qty');
-    const iPicked       = idx('picked');   // optional
-    const iNotes        = idx('notes');    // optional
-    const iImageUrl     = idx('imageurl'); // optional
-    const iImageAlt     = idx('image');    // optional
-
-    if (iOrderId === -1) throw new Error('Missing required column: orderId');
-    if (iItemTitle === -1 || iQty === -1) throw new Error('Missing required columns: itemTitle and qty');
-
-    const grouped = new Map(); // orderId -> order object
-
-    for (const r of rows.slice(1)) {
-      const pickedVal = (iPicked >= 0 ? r[iPicked] : '').toString().trim().toLowerCase();
-      const isPicked = pickedVal === 'true' || pickedVal === 'yes' || pickedVal === '1';
-      if (iPicked >= 0 && isPicked) continue;
-
-      const orderId = (r[iOrderId] || '').toString().trim();
-      const itemTitle = (r[iItemTitle] || '').toString().trim();
-      const variantTitle = (iVariantTitle >= 0 ? (r[iVariantTitle] || '').toString() : '');
-      const qty = parseInt(r[iQty], 10) || 0;
-
-      if (!orderId || !itemTitle || qty <= 0) continue;
-
-      // pack size -> cans
-      const packSizeMatch = String(variantTitle || '').match(/(\d+)\s*pack/i);
-      const packSize = packSizeMatch ? parseInt(packSizeMatch[1], 10) : 1;
-      const cans = qty * (packSize || 1);
-
-      const customerName = (iCustomerName >= 0 ? (r[iCustomerName] || '').toString() : '').trim();
-      const address = (iAddress >= 0 ? (r[iAddress] || '').toString() : '').trim();
-      const notes = (iNotes >= 0 ? (r[iNotes] || '').toString() : '').trim();
-
-      // image from Orders sheet if present
-      const imgFromOrders =
-        (iImageUrl >= 0 ? r[iImageUrl] : '') ||
-        (iImageAlt >= 0 ? r[iImageAlt] : '');
-
-      const imageUrl = getImageForTitle(itemTitle, imgFromOrders);
-
-      if (!grouped.has(orderId)) {
-        grouped.set(orderId, {
-          orderId,
-          customerName,
-          address,
-          notes,
-          items: [],
-          totalCans: 0,
-        });
-      }
-
-      const o = grouped.get(orderId);
-      o.items.push({ itemTitle, cans, imageUrl });
-      o.totalCans += cans;
-    }
-
-    orders = Array.from(grouped.values());
-    orders.forEach(o => o.items.sort((a,b) => a.itemTitle.localeCompare(b.itemTitle)));
-
-    // Build pickQueue (aggregate)
-    pickQueue = buildPickQueue(orders);
-    pickIndex = 0;
-    packIndex = 0;
-
-    renderStart();
-  } catch (err) {
-    console.error(err);
-    renderStartError(err.message);
-  }
-}
-
-function buildPickQueue(orderList) {
-  const map = new Map(); // title -> aggregated
-
-  for (const o of orderList) {
-    for (const it of o.items) {
-      const key = normalizeKey(it.itemTitle);
-      if (!key) continue;
-
-      if (!map.has(key)) {
-        map.set(key, {
-          itemTitle: it.itemTitle,
-          cans: 0,
-          imageUrl: it.imageUrl || '',
-          location: guessLocation(it.itemTitle),
-        });
-      }
-      const a = map.get(key);
-      a.cans += (it.cans || 0);
-      if (!a.imageUrl && it.imageUrl) a.imageUrl = it.imageUrl;
-    }
-  }
-
-  const queue = Array.from(map.values());
-  queue.sort((a,b) => {
-    const sa = a.location?.sortKey || '';
-    const sb = b.location?.sortKey || '';
-    if (sa !== sb) return sa.localeCompare(sb);
-    return a.itemTitle.localeCompare(b.itemTitle);
+    byOrder.get(orderId).itemsRaw.push(r);
   });
 
-  return queue;
-}
+  const out = [];
+  for(const o of byOrder.values()){
+    const merged = new Map();
 
-// ==================================================
-// RENDER: START
-// ==================================================
-function renderStart() {
-  showView(el.startView);
-  if (el.startError) el.startError.classList.add('hidden');
+    o.itemsRaw.forEach(r=>{
+      const title = safe(r.itemTitle);
+      const variant = safe(r.variantTitle);
+      const qty = Number(r.qty || 0) || 0;
+      const key = normalizeKey(title, variant);
 
-  setText(el.dashPending, orders.length); // real orders
-  setText(el.dashCans, pickQueue.reduce((s, it) => s + (it.cans || 0), 0));
-}
-
-function renderStartError(msg) {
-  showView(el.startView);
-  setText(el.dashPending, '—');
-  setText(el.dashCans, '—');
-  if (el.startError) {
-    el.startError.classList.remove('hidden');
-    setText(el.startError, msg);
-  } else {
-    alert(msg);
-  }
-}
-
-// ==================================================
-// RENDER: PICK MODE
-// ==================================================
-function startPicking() {
-  if (!pickQueue.length) return;
-  pickIndex = 0;
-  renderPick();
-}
-
-function renderPick() {
-  const it = pickQueue[pickIndex];
-  if (!it) return renderComplete();
-
-  showView(el.pickView);
-
-  setText(el.pickLocation, it.location?.label || '');
-  setText(el.pickProgress, `${pickIndex + 1} / ${pickQueue.length}`);
-  setText(el.pickName, it.itemTitle);
-
-  const qtyEl = getPickQtyEl();
-  if (qtyEl) qtyEl.textContent = `PICK: ${it.cans} CANS`;
-
-  safeSetImg(el.pickImage, it.imageUrl || '', 600);
-}
-
-function confirmPick() {
-  pickIndex++;
-  renderPick();
-}
-
-// ==================================================
-// COMPLETE
-// ==================================================
-function renderComplete() {
-  showView(el.completeView);
-  setText(el.pickedCount, pickQueue.length);
-  setText(el.issueCount, 0);
-}
-
-// ==================================================
-// PACK MODE
-// ==================================================
-function goPackMode() {
-  showView(el.packModeView);
-  renderPackOrder();
-}
-
-function calculateBoxes(n) {
-  if (n <= 6)  return { 24: 0, 12: 0, 6: 1 };
-  if (n <= 12) return { 24: 0, 12: 1, 6: 0 };
-
-  let best = { total: Infinity, totalCans: Infinity, counts: { 24: 0, 12: 0, 6: 0 } };
-
-  for (let a = 0; a <= Math.ceil(n / 24); a++) {
-    for (let b = 0; b <= Math.ceil(n / 12); b++) {
-      for (let c = 0; c <= Math.ceil(n / 6); c++) {
-        const totalCans = a * 24 + b * 12 + c * 6;
-        const totalBoxes = a + b + c;
-
-        if (totalCans >= n) {
-          const better =
-            totalBoxes < best.total ||
-            (totalBoxes === best.total && totalCans < best.totalCans);
-
-          if (better) {
-            best.total = totalBoxes;
-            best.totalCans = totalCans;
-            best.counts = { 24: a, 12: b, 6: c };
-          }
-        }
+      if(!merged.has(key)){
+        merged.set(key, {
+          itemTitle: title,
+          variantTitle: variant,
+          qty: 0,
+          imageUrl: safe(r.imageUrl),
+          aisle: guessAisle(title),
+          picked: false
+        });
       }
+
+      const it = merged.get(key);
+      it.qty += qty;
+
+      if(!it.imageUrl && safe(r.imageUrl)) it.imageUrl = safe(r.imageUrl);
+    });
+
+    const items = Array.from(merged.values())
+      .filter(x => x.qty > 0)
+      .map(x => ({ ...x, imageResolved: resolveImage(x) }))
+      .sort((a,b)=>{
+        const aa = a.aisle.localeCompare(b.aisle);
+        if(aa !== 0) return aa;
+        return a.itemTitle.localeCompare(b.itemTitle);
+      });
+
+    out.push({
+      orderId: o.orderId,
+      customerName: o.customerName,
+      address: o.address,
+      notes: o.notes,
+      items
+    });
+  }
+
+  out.sort((a,b)=> (a.orderId > b.orderId ? -1 : 1));
+  return out;
+}
+
+/* =========================================================
+   PICKED STATE (LOCAL)
+   ========================================================= */
+function applyPickedState(){
+  const picked = loadPicked();
+  orders.forEach(o=>{
+    const po = picked[o.orderId] || {};
+    o.items.forEach(it=>{
+      const k = normalizeKey(it.itemTitle, it.variantTitle);
+      it.picked = !!po[k];
+    });
+  });
+}
+
+function setItemPicked(orderId, item, val){
+  const picked = loadPicked();
+  if(!picked[orderId]) picked[orderId] = {};
+  const k = normalizeKey(item.itemTitle, item.variantTitle);
+  picked[orderId][k] = !!val;
+  savePicked(picked);
+
+  const o = orders[orderIndex];
+  const target = o.items.find(x => normalizeKey(x.itemTitle,x.variantTitle) === k);
+  if(target) target.picked = !!val;
+}
+
+/* =========================================================
+   UI RENDER
+   ========================================================= */
+function currentOrder(){ return orders[orderIndex]; }
+
+function calcTotals(order){
+  const total = order.items.reduce((s,it)=> s + it.qty, 0);
+  const picked = order.items.reduce((s,it)=> s + (it.picked ? it.qty : 0), 0);
+  return { total, picked };
+}
+
+function boxesRequired(totalCans){
+  if(totalCans <= 0) return '0';
+  const full24 = Math.floor(totalCans / 24);
+  const rem = totalCans % 24;
+  let parts = [];
+  if(full24) parts.push(`${full24}×24-pack`);
+  if(rem) parts.push(`1×${rem}-pack`);
+  return parts.join(' + ');
+}
+
+function updateOrderStrip(){
+  const o = currentOrder();
+  if(!o){ $('orderStrip').style.display='none'; return; }
+  $('orderStrip').style.display='block';
+
+  const {total,picked} = calcTotals(o);
+  const pct = total ? Math.round((picked/total)*100) : 0;
+
+  $('stripNameCity').textContent = `${firstNameInitial(o.customerName)} · ${cityProvince(o.address)}`;
+  $('stripMeta').textContent = `#${o.orderId} · ${total} cans · ${boxesRequired(total)}`;
+  $('stripPill').textContent = `${pct}%`;
+
+  $('progressFill').style.width = `${pct}%`;
+  $('progressLeft').textContent = `${picked} picked`;
+  $('progressRight').textContent = `${total} total`;
+
+  $('fullAddress').innerHTML =
+    `<div>${safe(o.customerName) || '—'}</div>
+     <div class="muted">${safe(o.address) || '—'}</div>`;
+
+  $('kvOrder').textContent = `#${o.orderId}`;
+  $('kvBoxes').textContent = boxesRequired(total);
+  $('kvCans').textContent = `${total}`;
+  $('kvMode').textContent = MODE === 'picker' ? 'Picker' : 'Pack';
+}
+
+function buildPickQueue(){
+  const o = currentOrder();
+  pickQueue = o.items.filter(it => !it.picked);
+  pickIndex = 0;
+}
+
+function render(){
+  setError('');
+
+  const o = currentOrder();
+  if(!o){
+    $('panelTitle').textContent = 'No orders found';
+    $('panelSub').textContent = '';
+    $('panelBody').innerHTML = `<div class="empty">Your sheet returned no valid orders.</div>`;
+    $('navRow').style.display='none';
+    $('orderStrip').style.display='none';
+    return;
+  }
+
+  updateOrderStrip();
+
+  if(MODE === 'picker'){
+    $('panelTitle').textContent = 'Picker Mode';
+    $('navRow').style.display = 'flex';
+
+    buildPickQueue();
+
+    if(pickQueue.length === 0){
+      $('panelSub').textContent = `Order ${orderIndex+1} / ${orders.length}`;
+      $('panelBody').innerHTML = `
+        <div class="pickerCard">
+          <div class="bigQty">
+            <div class="num">DONE</div>
+            <div class="lbl">ORDER PICKED</div>
+          </div>
+          <div class="titleBlock">
+            <div class="name">Everything is picked for this order.</div>
+            <div class="sub"><span class="tag">Switch to Pack Mode to box it.</span></div>
+          </div>
+          <div class="confirmRow">
+            <button class="btn btnWide" id="goPack">Go to Pack Mode</button>
+          </div>
+        </div>
+      `;
+      $('goPack').addEventListener('click', ()=> setMode('pack'));
+      return;
     }
+
+    const it = pickQueue[pickIndex];
+    const left = pickQueue.length - pickIndex;
+
+    $('panelSub').textContent = `Order ${orderIndex+1}/${orders.length} · ${left} picks left`;
+
+    $('panelBody').innerHTML = `
+      <div class="pickerCard">
+        <div class="bigQty">
+          <div class="num">${it.qty}</div>
+          <div class="lbl">CANS</div>
+        </div>
+
+        <div class="imgBox">
+          <img id="pickerImg" src="${it.imageResolved}" alt="${escapeHtml(it.itemTitle)}">
+        </div>
+
+        <div class="titleBlock">
+          <div class="name">${escapeHtml(it.itemTitle)}</div>
+          <div class="sub">
+            <span class="tag">${escapeHtml(it.aisle)}</span>
+            ${it.variantTitle ? `<span class="tag">${escapeHtml(it.variantTitle)}</span>` : ''}
+          </div>
+        </div>
+
+        <div class="confirmRow">
+          <button class="btn btnWide ok" id="btnConfirmPick">CONFIRM PICK</button>
+          <button class="btn btnWide danger" id="btnSkipPick">SKIP (leave unpicked)</button>
+        </div>
+      </div>
+    `;
+
+    $('pickerImg').addEventListener('click', ()=> openImgModal(it));
+    $('btnConfirmPick').addEventListener('click', ()=>{
+      setItemPicked(o.orderId, it, true);
+      render();
+    });
+    $('btnSkipPick').addEventListener('click', ()=>{
+      if(pickIndex < pickQueue.length - 1) pickIndex++;
+      else pickIndex = 0;
+      render();
+    });
+
+  } else {
+    $('panelTitle').textContent = 'Pack Mode';
+    const {total,picked} = calcTotals(o);
+    $('panelSub').textContent = `Order ${orderIndex+1}/${orders.length} · ${picked}/${total} cans picked`;
+    $('navRow').style.display = 'flex';
+
+    const rows = o.items.map(it=>{
+      const done = it.picked ? 'done' : '';
+      const label = it.picked ? 'PICKED' : `${it.qty} cans`;
+      return `
+        <div class="row" data-key="${escapeAttr(normalizeKey(it.itemTitle,it.variantTitle))}">
+          <div class="thumb"><img src="${it.imageResolved}" alt="${escapeHtml(it.itemTitle)}"></div>
+          <div>
+            <div class="rTitle">${escapeHtml(it.itemTitle)}</div>
+            <div class="rSub">
+              <span class="tag">${escapeHtml(it.aisle)}</span>
+              ${it.variantTitle ? `<span class="tag">${escapeHtml(it.variantTitle)}</span>` : ''}
+            </div>
+          </div>
+          <button class="qtyBtn ${done}" data-action="toggle">${escapeHtml(label)}</button>
+        </div>
+      `;
+    }).join('');
+
+    $('panelBody').innerHTML = rows || `<div class="empty">No items found for this order.</div>`;
+
+    $('panelBody').querySelectorAll('.row').forEach(row=>{
+      const k = row.getAttribute('data-key');
+      const it = o.items.find(x => normalizeKey(x.itemTitle,x.variantTitle) === k);
+      if(!it) return;
+
+      row.querySelector('img').addEventListener('click', ()=> openImgModal(it));
+      row.querySelector('[data-action="toggle"]').addEventListener('click', ()=>{
+        setItemPicked(o.orderId, it, !it.picked);
+        render();
+      });
+    });
   }
-  return best.counts;
+
+  $('btnPrev').onclick = ()=> { if(orderIndex>0){ orderIndex--; render(); } };
+  $('btnNext').onclick = ()=> { if(orderIndex<orders.length-1){ orderIndex++; render(); } };
 }
 
-function renderPackOrder() {
-  if (!orders.length) return;
-
-  if (packIndex < 0) packIndex = 0;
-  if (packIndex > orders.length - 1) packIndex = orders.length - 1;
-
-  const o = orders[packIndex];
-
-  setText(el.packOrderId, `Order #${o.orderId}`);
-  setText(el.packCustomerName, o.customerName || '');
-  setText(el.packCustomerAddress, o.address || '');
-
-  if (el.packPrevBtn) el.packPrevBtn.disabled = packIndex === 0;
-  if (el.packNextBtn) el.packNextBtn.disabled = packIndex === orders.length - 1;
-
-  const b = calculateBoxes(o.totalCans);
-  const lines = [];
-  if (b[24]) lines.push(`${b[24]}×24-pack`);
-  if (b[12]) lines.push(`${b[12]}×12-pack`);
-  if (b[6])  lines.push(`${b[6]}×6-pack`);
-
-  if (el.packBoxesInfo) {
-    el.packBoxesInfo.innerHTML =
-      `<strong>Boxes Required:</strong> ${lines.length ? lines.join(', ') : '—'}<br>` +
-      `<strong>Total Cans:</strong> ${o.totalCans}` +
-      (o.notes ? `<br><strong>Notes:</strong> ${escapeHtml(o.notes)}` : '');
-  }
-
-  const container = getPackItemsContainer();
-  if (!container) return;
-
-  container.innerHTML = '';
-  const frag = document.createDocumentFragment();
-
-  for (const it of o.items) {
-    const row = document.createElement('div');
-    row.className = 'item';
-
-    const img = document.createElement('img');
-    img.alt = it.itemTitle || '';
-    img.onerror = () => { img.src = placeholderImgUrl(80); };
-    img.src = it.imageUrl || placeholderImgUrl(80);
-
-    const details = document.createElement('div');
-    details.className = 'details';
-
-    const p1 = document.createElement('p');
-    p1.innerHTML = `<strong>${escapeHtml(it.itemTitle)}</strong>`;
-
-    const p2 = document.createElement('p');
-    p2.textContent = `${it.cans} cans`;
-
-    details.appendChild(p1);
-    details.appendChild(p2);
-
-    row.appendChild(img);
-    row.appendChild(details);
-    frag.appendChild(row);
-  }
-
-  container.appendChild(frag);
+function setMode(m){
+  MODE = m;
+  $('btnPicker').classList.toggle('secondary', MODE !== 'picker');
+  $('btnPack').classList.toggle('secondary', MODE !== 'pack');
+  render();
 }
 
-// ==================================================
-// EVENTS (REAL WIRING)
-// ==================================================
-on(el.startPickingBtn, 'click', startPicking);
-on(el.confirmPickBtn, 'click', confirmPick);
+/* =========================================================
+   IMAGE MODAL
+   ========================================================= */
+function openImgModal(item){
+  $('imgModalImg').src = item.imageResolved;
+  $('imgModalCap').textContent = item.itemTitle;
+  $('imgModal').classList.add('show');
+}
 
-on(el.goToPackBtn, 'click', goPackMode);
-on(el.goPackModeBtn, 'click', goPackMode);
+$('imgModal').addEventListener('click', (e)=>{
+  if(e.target.id === 'imgModal') $('imgModal').classList.remove('show');
+});
 
-on(el.goStartBtn, 'click', () => showView(el.startView));
-on(el.backToStartBtn, 'click', () => showView(el.startView));
+/* =========================================================
+   ORDER STRIP TOGGLE
+   ========================================================= */
+$('orderStripTop').addEventListener('click', ()=>{
+  const d = $('orderStripDetail');
+  const open = d.classList.toggle('show');
+  $('stripCaret').textContent = open ? '▴' : '▾';
+});
 
-on(el.packPrevBtn, 'click', () => { if (packIndex > 0) { packIndex--; renderPackOrder(); } });
-on(el.packNextBtn, 'click', () => { if (packIndex < orders.length - 1) { packIndex++; renderPackOrder(); } });
+/* =========================================================
+   HTML ESCAPE
+   ========================================================= */
+function escapeHtml(str){
+  return (str ?? '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+function escapeAttr(str){ return escapeHtml(str).replaceAll('"','&quot;'); }
 
-// ==================================================
-// INIT
-// ==================================================
-showView(el.startView);
-loadOrders();
+/* =========================================================
+   INIT
+   ========================================================= */
+async function init(){
+  try{
+    $('btnPicker').addEventListener('click', ()=> setMode('picker'));
+    $('btnPack').addEventListener('click', ()=> setMode('pack'));
+
+    // Start in Pack Mode (safer)
+    $('btnPicker').classList.add('secondary');
+
+    await loadImageLookup();
+
+    const j = await fetchJson(ordersUrl);
+    rawRows = rowsToObjects(j.values || []);
+    orders = buildOrders(rawRows);
+
+    applyPickedState();
+
+    if(!orders.length){
+      setError('No orders found. Confirm your Orders sheet headers + data.');
+    }
+
+    setMode('pack');
+  }catch(e){
+    setError(`Error loading sheet. ${e.message}`);
+    $('panelTitle').textContent = 'Error';
+    $('panelBody').innerHTML = `<div class="empty">Could not load data.</div>`;
+  }
+}
+
+init();
