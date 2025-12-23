@@ -174,26 +174,44 @@ body{
   font-size:11px;
 }
 
-/* ✅ QTY = RED + BREATHING */
-@keyframes qtyBreathe {
-  0% { transform: scale(1); box-shadow:0 0 0 rgba(239,68,68,0); }
-  50% { transform: scale(1.06); box-shadow:0 0 14px rgba(239,68,68,.32); }
-  100% { transform: scale(1); box-shadow:0 0 0 rgba(239,68,68,0); }
-}
-.qtyBig{
-  min-width:72px;
-  height:50px;
-  border-radius:16px;
+/* MAIN QTY / DONE ACTION (RED) */
+.qtyAction{
+  min-width:80px;
+  height:64px;
+  border-radius:18px;
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
   border:2px solid #fecdd3;
   display:grid;
   place-items:center;
-  font-weight:1200;
-  font-size:26px;
-  color:#dc2626;
+  padding:6px 8px;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.qtyBreathe{
-  animation: qtyBreathe 2.6s ease-in-out infinite;
+.qtyAction:active{ transform: translateY(1px); }
+
+.qtyNumber{
+  font-weight:1200;
+  font-size:28px;
+  color:#dc2626;
+  line-height:1;
+}
+
+.qtyDone{
+  display:grid;
+  place-items:center;
+  gap:4px;
+}
+.qtyCheck{
+  font-size:26px;
+  font-weight:1200;
+  color:#000;
+  line-height:1;
+}
+.qtyNext{
+  font-size:11px;
+  font-weight:1100;
+  letter-spacing:.08em;
+  color:#000;
 }
 
 /* HERO */
@@ -265,15 +283,20 @@ body{
   margin-bottom:6px;
   gap:8px;
 }
+
+/* ✅ mini qty now RED */
 .miniQty{
   font-weight:1200;
   font-size:13px;
-  background:#ede9fe;
-  color:#341a8a;
-  border:1px solid #e9e3ff;
   border-radius:12px;
   padding:6px 8px;
 }
+.miniQtyRed{
+  background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
+  border:2px solid #fecdd3;
+  color:#dc2626;
+}
+
 .miniAisle{
   font-size:11px;
   font-weight:1000;
@@ -352,14 +375,4 @@ body{
   color:var(--muted);
   font-weight:950;
   line-height:1.2;
-}
-
-/* ✅ DONE STATE: NEXT ORDER breathes (added by JS after 1.5s) */
-@keyframes nextOrderBreathe {
-  0% { transform: scale(1); box-shadow:0 0 0 rgba(91,47,214,0); }
-  50% { transform: scale(1.05); box-shadow:0 0 18px rgba(91,47,214,.35); }
-  100% { transform: scale(1); box-shadow:0 0 0 rgba(91,47,214,0); }
-}
-.nextOrderFocus{
-  animation: nextOrderBreathe 2.8s ease-in-out infinite;
 }
