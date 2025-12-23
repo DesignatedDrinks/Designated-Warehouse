@@ -232,20 +232,27 @@ body{
   font-size:11px;
 }
 
-/* ✅ Breathing animation (constant) */
-@keyframes qtyBreathe {
+/* ✅ shared breathing animation (apply to qty + next button) */
+@keyframes breatheGlow {
   0% {
     transform: scale(1);
     box-shadow: 0 0 0 rgba(91,47,214,0.0);
+    filter: saturate(1);
   }
   50% {
-    transform: scale(1.04);
-    box-shadow: 0 0 12px rgba(91,47,214,0.18);
+    transform: scale(1.03);
+    box-shadow: 0 0 14px rgba(91,47,214,0.18);
+    filter: saturate(1.08);
   }
   100% {
     transform: scale(1);
     box-shadow: 0 0 0 rgba(91,47,214,0.0);
+    filter: saturate(1);
   }
+}
+
+.breathe{
+  animation: breatheGlow 2.6s ease-in-out infinite;
 }
 
 .qtyBig{
@@ -259,7 +266,6 @@ body{
   font-weight:1200;
   font-size:24px;
   color:var(--purple);
-  animation: qtyBreathe 2.6s ease-in-out infinite;
 }
 
 /* =====================
