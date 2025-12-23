@@ -69,7 +69,7 @@ body{
   box-shadow:0 10px 20px rgba(239,68,68,.18);
 }
 
-/* ORDER CARD (shrunken) */
+/* ORDER CARD */
 .orderCard{
   margin-top:8px;
   background:var(--card);
@@ -190,7 +190,7 @@ body{
   place-items:center;
   font-weight:1200;
   font-size:26px;
-  color:#dc2626; /* RED */
+  color:#dc2626;
 }
 .qtyBreathe{
   animation: qtyBreathe 2.6s ease-in-out infinite;
@@ -338,6 +338,21 @@ body{
 .listRow .lTitle{ font-weight:1050; font-size:13px; line-height:1.15; }
 .listRow .lSub{ margin-top:5px; color:var(--muted); font-weight:950; font-size:12px; }
 .listRow .lQty{ align-self:center; font-weight:1200; font-size:16px; color:#111827; }
+
+/* LIST FOOTER RESET */
+.listFooter{
+  padding:12px;
+  border-top:1px solid var(--line);
+  background:#fff;
+  display:grid;
+  gap:8px;
+}
+.resetHint{
+  font-size:11px;
+  color:var(--muted);
+  font-weight:950;
+  line-height:1.2;
+}
 
 /* ✅ DONE STATE: NEXT ORDER breathes (added by JS after 1.5s) */
 @keyframes nextOrderBreathe {
