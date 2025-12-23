@@ -10,7 +10,6 @@
   --danger:#ef4444;
 
   --shadow:0 12px 30px rgba(0,0,0,.08);
-  --r:22px;
   --tap:56px;
 }
 *{box-sizing:border-box}
@@ -119,11 +118,7 @@ body{
 
 /* Main */
 .wrap{ padding:10px 16px 28px; }
-
-.deck{
-  display:grid;
-  gap:12px;
-}
+.deck{ display:grid; gap:12px; }
 
 .card{
   background:var(--card);
@@ -133,7 +128,7 @@ body{
   overflow:hidden;
 }
 
-/* CURRENT (BIG) */
+/* CURRENT */
 .current{ padding-bottom:6px; }
 .cardHead{
   padding:14px 14px 10px;
@@ -176,38 +171,12 @@ body{
   color:var(--purple);
 }
 
-.imgWrap{
-  margin:0 14px 10px;
-  border:1px solid var(--line);
-  border-radius:22px;
-  background:#fff;
-  padding:10px;
-  display:grid;
-  place-items:center;
-}
-.bigImg{ padding:12px; }
-.imgWrap img{
-  width:100%;
-  max-width:420px;
-  height:auto;
-  border-radius:16px;
-  display:block;
-}
-
-.actions{ padding:0 14px 12px; display:grid; gap:10px; }
-.btn.big{
-  width:100%;
-  min-height:var(--tap);
-  border-radius:18px;
-  font-size:16px;
-}
-.row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-
-/* NEXT (TWO SMALL, SIDE BY SIDE) */
+/* NEXT ROW (ALWAYS VISIBLE) */
 .nextRow{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap:12px;
+  padding:0 14px 12px;
 }
 .nextTap{
   appearance:none;
@@ -247,7 +216,6 @@ body{
   border-radius:999px;
   padding:6px 10px;
 }
-
 .miniThumb{
   border:1px solid var(--line);
   border-radius:18px;
@@ -265,7 +233,6 @@ body{
   border-radius:14px;
   display:block;
 }
-
 .miniTitle{
   font-weight:1100;
   font-size:12px;
@@ -275,6 +242,37 @@ body{
   -webkit-line-clamp:3;
   -webkit-box-orient:vertical;
 }
+
+/* BIG IMAGE (CAPPED HEIGHT SO NEXT CARDS DON'T DISAPPEAR) */
+.imgWrap{
+  margin:0 14px 10px;
+  border:1px solid var(--line);
+  border-radius:22px;
+  background:#fff;
+  padding:10px;
+  display:grid;
+  place-items:center;
+}
+.bigImg{ padding:12px; }
+.imgWrap img{
+  width:100%;
+  max-width:420px;
+  height:auto;
+  max-height:42vh;
+  object-fit:contain;
+  border-radius:16px;
+  display:block;
+}
+
+/* Actions */
+.actions{ padding:0 14px 12px; display:grid; gap:10px; }
+.btn.big{
+  width:100%;
+  min-height:var(--tap);
+  border-radius:18px;
+  font-size:16px;
+}
+.row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 
 /* LIST */
 .listWrap{
