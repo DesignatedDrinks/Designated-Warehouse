@@ -52,7 +52,6 @@
   <main class="wrap">
     <section class="deck">
 
-      <!-- CURRENT (BIG) -->
       <div class="card current">
         <div class="cardHead">
           <div class="cardText">
@@ -62,9 +61,21 @@
           <div class="qtyBig" id="curQty">—</div>
         </div>
 
-        <!-- BIG IMAGE FIRST (so you SEE it) -->
-        <div class="imgWrap bigImg">
-          <img id="curImg" alt="Current item image" />
+        <!-- HERO PICK ROW: CAN LEFT, NEXT BUTTON RIGHT -->
+        <div class="heroPick">
+          <div class="imgWrap bigImg heroImg">
+            <img id="curImg" alt="Current item image" />
+          </div>
+
+          <div class="heroSide">
+            <button id="btnPickNext" class="btn heroNext secondary" type="button">
+              Next →
+            </button>
+
+            <div class="heroHint">
+              Tap once per item
+            </div>
+          </div>
         </div>
 
         <!-- NEXT (TWO SMALL) -->
@@ -92,8 +103,8 @@
           </button>
         </div>
 
+        <!-- BOTTOM ACTIONS -->
         <div class="actions">
-          <button id="btnPicked" class="btn big ok">PICKED → NEXT</button>
           <div class="row2">
             <button id="btnSkip" class="btn big secondary">Skip</button>
             <button id="btnUndo" class="btn big danger">Undo last</button>
