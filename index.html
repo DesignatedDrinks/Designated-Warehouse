@@ -62,7 +62,12 @@
           <div class="qtyBig" id="curQty">—</div>
         </div>
 
-        <!-- NEXT (TWO SMALL, ALWAYS VISIBLE) -->
+        <!-- BIG IMAGE FIRST (so you SEE it) -->
+        <div class="imgWrap bigImg">
+          <img id="curImg" alt="Current item image" />
+        </div>
+
+        <!-- NEXT (TWO SMALL) -->
         <div class="nextRow">
           <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
             <div class="miniTop">
@@ -72,7 +77,7 @@
             <div class="miniThumb">
               <img id="n1Img" alt="Next item image 1" />
             </div>
-            <div class="miniTitle" id="n1Title">—</div>
+            <div class="miniTitle" id="n1Title" style="display:none;"></div>
           </button>
 
           <button class="card nextTap" id="next2" type="button" aria-label="Next item 2">
@@ -83,13 +88,8 @@
             <div class="miniThumb">
               <img id="n2Img" alt="Next item image 2" />
             </div>
-            <div class="miniTitle" id="n2Title">—</div>
+            <div class="miniTitle" id="n2Title" style="display:none;"></div>
           </button>
-        </div>
-
-        <!-- BIG IMAGE (CAPPED HEIGHT) -->
-        <div class="imgWrap bigImg">
-          <img id="curImg" alt="Current item image" />
         </div>
 
         <div class="actions">
