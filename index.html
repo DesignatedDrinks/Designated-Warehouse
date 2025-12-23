@@ -5,29 +5,34 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
 
-  <!-- IMPORTANT: exact repo name + exact file name -->
   <link rel="stylesheet" href="/Designated-Warehouse/style.css" />
 </head>
 <body>
 
-  <div class="topbar">
-    <div class="brandRow">
-      <div class="brand">Designated<br/>Warehouse</div>
-      <div class="modeBtns">
-        <button id="btnPicker" class="btn">Picker</button>
-        <button id="btnPack" class="btn">Pack<br/>Mode</button>
+  <!-- TOP ORDER BAR -->
+  <header class="top">
+    <div class="topRow">
+      <div class="brand">
+        Designated <span>Warehouse</span>
+      </div>
+
+      <div class="orderNav">
+        <button id="btnPrevOrder" class="btn secondary">← Prev</button>
+        <button id="btnNextOrder" class="btn secondary">Next →</button>
       </div>
     </div>
 
-    <div id="orderStrip" class="orderStrip" style="display:none;">
-      <div class="orderStripTop" id="orderStripTop">
-        <div class="left">
-          <div id="stripNameCity" class="nameCity">—</div>
-          <div id="stripMeta" class="meta">—</div>
+    <div id="orderCard" class="orderCard" style="display:none;">
+      <div class="orderMain">
+        <div class="who">
+          <div id="whoLine" class="whoLine">—</div>
+          <div id="addrLine" class="addrLine">—</div>
         </div>
-        <div class="right">
-          <div id="stripPill" class="pill">0%</div>
-          <div class="caret" id="stripCaret">▾</div>
+
+        <div class="chips">
+          <div class="chip" id="chipOrder">#—</div>
+          <div class="chip" id="chipBoxes">Boxes: —</div>
+          <div class="chip" id="chipProgress">0%</div>
         </div>
       </div>
 
@@ -39,45 +44,68 @@
         </div>
       </div>
 
-      <div id="orderStripDetail" class="orderStripDetail">
-        <div class="addr" id="fullAddress">—</div>
-        <div class="detailGrid">
-          <div class="kv"><div class="k">ORDER</div><div class="v" id="kvOrder">—</div></div>
-          <div class="kv"><div class="k">BOXES</div><div class="v" id="kvBoxes">—</div></div>
-          <div class="kv"><div class="k">TOTAL CANS</div><div class="v" id="kvCans">—</div></div>
-          <div class="kv"><div class="k">MODE</div><div class="v" id="kvMode">—</div></div>
+      <div id="errBox"></div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <main class="wrap">
+    <section class="queue">
+
+      <!-- CURRENT -->
+      <div class="card current">
+        <div class="cardHead">
+          <div class="cardText">
+            <div class="title" id="curTitle">Loading…</div>
+            <div class="sub" id="curSub">—</div>
+          </div>
+          <div class="qtyBig" id="curQty">—</div>
+        </div>
+
+        <div class="imgWrap">
+          <img id="curImg" alt="Current item image" />
+        </div>
+
+        <div class="actions">
+          <button id="btnPicked" class="btn big ok">PICKED → NEXT</button>
+          <div class="row2">
+            <button id="btnSkip" class="btn big secondary">Skip</button>
+            <button id="btnUndo" class="btn big danger">Undo last</button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div id="errBox"></div>
-  </div>
+      <!-- NEXT 2 -->
+      <div class="nextRow">
+        <div class="card next" id="next1">
+          <div class="miniHead">
+            <div class="miniTitle" id="n1Title">—</div>
+            <div class="miniQty" id="n1Qty">—</div>
+          </div>
+          <div class="miniSub" id="n1Sub">—</div>
+        </div>
 
-  <div class="wrap">
-    <div class="panel">
-      <div class="panelHead">
-        <h2 id="panelTitle">Loading…</h2>
-        <div class="small" id="panelSub">—</div>
+        <div class="card next" id="next2">
+          <div class="miniHead">
+            <div class="miniTitle" id="n2Title">—</div>
+            <div class="miniQty" id="n2Qty">—</div>
+          </div>
+          <div class="miniSub" id="n2Sub">—</div>
+        </div>
       </div>
 
-      <div id="panelBody"></div>
-
-      <div class="navRow" id="navRow" style="display:none;">
-        <button id="btnPrev" class="btn secondary">← Prev</button>
-        <button id="btnNext" class="btn secondary">Next →</button>
+      <!-- OPTIONAL: quick full list (no tapping required to pick) -->
+      <div class="listWrap">
+        <div class="listHeader">
+          <div class="listTitle">Order list</div>
+          <div class="listHint">Tap a row to jump (optional)</div>
+        </div>
+        <div id="listBody" class="listBody"></div>
       </div>
-    </div>
-  </div>
 
-  <div id="imgModal" class="modal" role="dialog" aria-modal="true">
-    <div class="modalCard">
-      <img id="imgModalImg" alt="">
-      <div class="cap" id="imgModalCap">—</div>
-      <div class="cap2">Tap outside to close</div>
-    </div>
-  </div>
+    </section>
+  </main>
 
-  <!-- JS path must also match repo name -->
   <script src="/Designated-Warehouse/script.js"></script>
 </body>
 </html>
