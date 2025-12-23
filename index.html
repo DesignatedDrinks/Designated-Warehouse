@@ -1,122 +1,489 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root{
+      --bg:#f6f6f7;
+      --card:#ffffff;
+      --ink:#111827;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --purple:#5b2fd6;
+      --purple2:#6d42e6;
+      --danger:#ef4444;
+      --ok:#10b981;
+      --shadow: 0 10px 30px rgba(0,0,0,.08);
+      --r:18px;
+      --tap:52px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:var(--bg);
+      color:var(--ink);
+    }
+
+    /* APP SHELL */
+    .topbar{
+      position:sticky; top:0; z-index:20;
+      background:linear-gradient(180deg,#fff 0%, #fff 70%, rgba(255,255,255,0) 100%);
+      padding:16px 16px 10px;
+    }
+    .brandRow{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    .brand{
+      font-weight:900;
+      font-size:34px;
+      letter-spacing:-.02em;
+      line-height:1;
+      color:var(--purple);
+    }
+    .modeBtns{
+      display:flex; gap:10px;
+    }
+    .btn{
+      border:0;
+      border-radius:16px;
+      padding:14px 16px;
+      min-height:48px;
+      font-weight:800;
+      letter-spacing:.01em;
+      background:var(--purple);
+      color:#fff;
+      box-shadow: 0 10px 20px rgba(91,47,214,.22);
+      cursor:pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:active{ transform: translateY(1px); }
+    .btn.secondary{
+      background:#ede9fe;
+      color:#341a8a;
+      box-shadow:none;
+    }
+    .btn.ghost{
+      background:transparent;
+      color:var(--purple);
+      border:2px solid #e9e3ff;
+      box-shadow:none;
+    }
+
+    /* ORDER STRIP */
+    .orderStrip{
+      margin-top:12px;
+      border-radius:20px;
+      background:var(--card);
+      box-shadow: var(--shadow);
+      border:1px solid #f0f0f0;
+      overflow:hidden;
+    }
+    .orderStripTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:14px 14px;
+      cursor:pointer;
+    }
+    .orderStripTop .left{
+      display:flex; flex-direction:column; gap:2px; min-width:0;
+    }
+    .orderStripTop .nameCity{
+      font-weight:900;
+      font-size:14px;
+      color:#111;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .orderStripTop .meta{
+      font-size:13px;
+      color:var(--muted);
+      font-weight:700;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .orderStripTop .right{
+      display:flex; align-items:center; gap:10px;
+      flex-shrink:0;
+    }
+    .pill{
+      background:#f3f4f6;
+      border:1px solid var(--line);
+      padding:8px 10px;
+      border-radius:999px;
+      font-weight:900;
+      font-size:12px;
+      color:#111;
+    }
+    .caret{
+      width:38px; height:38px; border-radius:12px;
+      display:grid; place-items:center;
+      background:#f3f4f6; border:1px solid var(--line);
+      font-weight:900;
+      color:#111;
+    }
+    .progressWrap{
+      padding:0 14px 14px;
+    }
+    .progressBar{
+      height:10px;
+      background:#ede9fe;
+      border-radius:999px;
+      overflow:hidden;
+      border:1px solid #e9e3ff;
+    }
+    .progressFill{
+      height:100%;
+      width:0%;
+      background:linear-gradient(90deg,var(--purple),var(--purple2));
+      border-radius:999px;
+      transition:width .25s ease;
+    }
+    .progressMeta{
+      margin-top:8px;
+      display:flex;
+      justify-content:space-between;
+      color:var(--muted);
+      font-weight:800;
+      font-size:12px;
+    }
+    .orderStripDetail{
+      border-top:1px solid var(--line);
+      padding:12px 14px 14px;
+      display:none;
+      background:#fafafa;
+    }
+    .orderStripDetail.show{ display:block; }
+    .addr{
+      font-weight:800;
+      color:#111;
+      font-size:14px;
+      line-height:1.25;
+    }
+    .addr .muted{ color:var(--muted); font-weight:800; }
+    .detailGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    .kv{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:10px 12px;
+    }
+    .kv .k{ font-size:11px; color:var(--muted); font-weight:900; letter-spacing:.06em; }
+    .kv .v{ font-size:15px; font-weight:900; margin-top:4px; }
+
+    /* MAIN */
+    .wrap{ padding: 12px 16px 24px; }
+    .panel{
+      background:var(--card);
+      border:1px solid #f0f0f0;
+      border-radius:24px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .panelHead{
+      padding:14px 14px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid var(--line);
+    }
+    .panelHead h2{
+      margin:0;
+      font-size:20px;
+      letter-spacing:-.02em;
+    }
+    .panelHead .small{
+      color:var(--muted);
+      font-weight:900;
+      font-size:12px;
+    }
+
+    /* PICKER CARD (ONE ITEM AT A TIME) */
+    .pickerCard{
+      padding:14px;
+      display:grid;
+      gap:12px;
+    }
+    .bigQty{
+      background:linear-gradient(180deg,#f6f2ff 0%, #efeaff 100%);
+      border:1px solid #e9e3ff;
+      border-radius:22px;
+      padding:16px 14px;
+      text-align:center;
+    }
+    .bigQty .num{
+      font-size:56px;
+      line-height:1;
+      font-weight:1000;
+      color:var(--purple);
+      letter-spacing:-.04em;
+    }
+    .bigQty .lbl{
+      margin-top:6px;
+      font-weight:1000;
+      font-size:14px;
+      color:#3b1da6;
+      letter-spacing:.08em;
+    }
+    .imgBox{
+      border:1px solid var(--line);
+      border-radius:22px;
+      background:#fff;
+      padding:10px;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+    }
+    .imgBox img{
+      width:100%;
+      max-width:320px;
+      height:auto;
+      border-radius:16px;
+      display:block;
+    }
+    .titleBlock{
+      display:grid;
+      gap:6px;
+    }
+    .titleBlock .name{
+      font-weight:1000;
+      font-size:18px;
+      letter-spacing:-.02em;
+      line-height:1.1;
+    }
+    .titleBlock .sub{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      color:var(--muted);
+      font-weight:900;
+      font-size:13px;
+    }
+    .tag{
+      background:#f3f4f6;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:8px 10px;
+      font-weight:1000;
+      color:#111;
+      font-size:12px;
+    }
+    .confirmRow{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:10px;
+      margin-top:6px;
+    }
+    .btnWide{
+      width:100%;
+      min-height: var(--tap);
+      border-radius:18px;
+      font-size:16px;
+      font-weight:1000;
+    }
+    .btnWide.ok{ background: var(--ok); box-shadow: 0 10px 20px rgba(16,185,129,.22); }
+    .btnWide.danger{ background: var(--danger); box-shadow: 0 10px 20px rgba(239,68,68,.18); }
+
+    /* PACK LIST */
+    .list{
+      display:flex;
+      flex-direction:column;
+    }
+    .row{
+      display:grid;
+      grid-template-columns: 64px 1fr auto;
+      gap:12px;
+      padding:14px;
+      border-bottom:1px solid var(--line);
+      align-items:center;
+    }
+    .row:last-child{ border-bottom:0; }
+    .thumb{
+      width:64px; height:64px;
+      border-radius:16px;
+      border:1px solid var(--line);
+      background:#fff;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
+    }
+    .thumb img{ width:100%; height:100%; object-fit:contain; display:block; }
+    .row .rTitle{
+      font-weight:1000;
+      font-size:14px;
+      line-height:1.15;
+    }
+    .row .rSub{
+      margin-top:6px;
+      color:var(--muted);
+      font-weight:900;
+      font-size:12px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+    .qtyBtn{
+      min-width:110px;
+      text-align:center;
+      border-radius:18px;
+      padding:14px 12px;
+      font-weight:1100;
+      font-size:18px;
+      color:#fff;
+      background:var(--purple);
+      border:0;
+      cursor:pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .qtyBtn.done{
+      background:#111827;
+    }
+
+    /* NAV ROW */
+    .navRow{
+      display:flex;
+      gap:10px;
+      padding:14px;
+      border-top:1px solid var(--line);
+      background:#fafafa;
+    }
+    .navRow .btn{ flex:1; min-height: var(--tap); border-radius:18px; }
+
+    /* FULLSCREEN IMAGE */
+    .modal{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      z-index:50;
+      padding:18px;
+    }
+    .modal.show{ display:flex; align-items:center; justify-content:center; }
+    .modalCard{
+      width:min(520px,100%);
+      background:#fff;
+      border-radius:24px;
+      padding:12px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.35);
+    }
+    .modalCard img{
+      width:100%;
+      height:auto;
+      display:block;
+      border-radius:18px;
+      background:#fff;
+    }
+    .modalCard .cap{
+      margin-top:10px;
+      font-weight:1000;
+      font-size:14px;
+      color:#111;
+    }
+    .modalCard .cap2{
+      margin-top:4px;
+      font-weight:900;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    /* EMPTY / ERROR */
+    .empty{
+      padding:18px 14px;
+      color:var(--muted);
+      font-weight:900;
+      font-size:14px;
+    }
+    .error{
+      margin-top:12px;
+      padding:14px;
+      border-radius:18px;
+      background:#fff1f2;
+      border:1px solid #fecdd3;
+      color:#9f1239;
+      font-weight:1000;
+    }
+  </style>
 </head>
 <body>
 
-<header>
-  <div class="header-inner">
-    <h1>Designated Warehouse</h1>
-    <div class="header-actions">
-      <button id="goStartBtn" class="nav-btn">Picker</button>
-      <button id="goPackModeBtn" class="nav-btn">Pack Mode</button>
-    </div>
-  </div>
-</header>
-
-<!-- SCREEN 1: START PICK -->
-<section id="startView">
-  <div class="dash">
-    <div class="dash-item">
-      <div class="dash-value" id="dash-pending">—</div>
-      <div class="dash-label">Orders</div>
-    </div>
-    <div class="dash-item">
-      <div class="dash-value" id="dash-cans">—</div>
-      <div class="dash-label">Cans</div>
-    </div>
-  </div>
-
-  <div class="start-actions">
-    <button id="startPickingBtn" class="primary-btn">START PICKING</button>
-    <div id="startError" class="hint hidden"></div>
-  </div>
-</section>
-
-<!-- SCREEN 2: PICK ITEM -->
-<section id="pickView" class="hidden">
-  <div class="pick-top">
-    <div class="pick-location" id="pickLocation">LOCATION</div>
-    <div class="pick-progress" id="pickProgress">0 / 0</div>
-  </div>
-
-  <div class="pick-card">
-    <img id="pickImage" alt="Product image" />
-    <div class="pick-name" id="pickName">Product Name</div>
-    <div class="pick-qty" id="pickQty">PICK: 0 CANS</div>
-
-    <button id="confirmPickBtn" class="primary-btn">✅ CONFIRM PICK</button>
-    <button id="issueBtn" class="secondary-btn">Issue</button>
-  </div>
-
-  <!-- Issue Modal -->
-  <div id="issueModal" class="modal hidden">
-    <div class="modal-card">
-      <h2>Issue</h2>
-      <button class="modal-option" data-issue="short">Short Stock</button>
-      <button class="modal-option" data-issue="damaged">Damaged</button>
-      <button class="modal-option" data-issue="missing">Missing</button>
-      <button class="modal-option" data-issue="other">Other</button>
-      <button id="closeIssueModalBtn" class="nav-btn">Close</button>
-    </div>
-  </div>
-</section>
-
-<!-- SCREEN 3: COMPLETE -->
-<section id="completeView" class="hidden">
-  <div class="complete-card">
-    <div class="complete-title">✅ PICK COMPLETE</div>
-    <div class="complete-stat">Unique items: <span id="pickedCount">0</span></div>
-    <div class="complete-stat">Issues: <span id="issueCount">0</span></div>
-
-    <button id="goToPackBtn" class="primary-btn">GO TO PACK MODE</button>
-  </div>
-</section>
-
-<!-- PACK MODE -->
-<section id="packModeView" class="hidden">
-  <div class="pack-header">
-    <h2>Pack Mode</h2>
-    <button id="backToStartBtn" class="nav-btn">← Back</button>
-  </div>
-
-  <div class="order-container">
-    <div class="order-header">
-      <button id="packPrevBtn" class="nav-btn">←</button>
-
-      <div class="order-info">
-        <h2 id="packOrderId">Order #—</h2>
-        <div id="packCustomerName" class="customer-name"></div>
-        <div id="packCustomerAddress" class="customer-address"></div>
+  <div class="topbar">
+    <div class="brandRow">
+      <div class="brand">Designated<br/>Warehouse</div>
+      <div class="modeBtns">
+        <button id="btnPicker" class="btn">Picker</button>
+        <button id="btnPack" class="btn">Pack<br/>Mode</button>
       </div>
-
-      <button id="packNextBtn" class="nav-btn">→</button>
     </div>
 
-    <div class="boxes-info" id="packBoxesInfo"></div>
-
-    <div class="items-list" id="packItemsContainer"></div>
-
-    <div class="pack-tools">
-      <button id="openPackPickerBtn" class="nav-btn">Open Pack Picker</button>
-
-      <div id="packPickerPanel" class="hidden">
-        <div class="filter-container">
-          <label for="packDropdown">Select Variety Pack:</label>
-          <select id="packDropdown">
-            <option value="All">All</option>
-          </select>
+    <div id="orderStrip" class="orderStrip" style="display:none;">
+      <div class="orderStripTop" id="orderStripTop">
+        <div class="left">
+          <div id="stripNameCity" class="nameCity">—</div>
+          <div id="stripMeta" class="meta">—</div>
         </div>
-        <div id="results">Loading packs…</div>
+        <div class="right">
+          <div id="stripPill" class="pill">0%</div>
+          <div class="caret" id="stripCaret">▾</div>
+        </div>
+      </div>
+
+      <div class="progressWrap">
+        <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
+        <div class="progressMeta">
+          <div id="progressLeft">0 picked</div>
+          <div id="progressRight">0 total</div>
+        </div>
+      </div>
+
+      <div id="orderStripDetail" class="orderStripDetail">
+        <div class="addr" id="fullAddress">—</div>
+        <div class="detailGrid">
+          <div class="kv"><div class="k">ORDER</div><div class="v" id="kvOrder">—</div></div>
+          <div class="kv"><div class="k">BOXES</div><div class="v" id="kvBoxes">—</div></div>
+          <div class="kv"><div class="k">TOTAL CANS</div><div class="v" id="kvCans">—</div></div>
+          <div class="kv"><div class="k">MODE</div><div class="v" id="kvMode">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="errBox"></div>
+  </div>
+
+  <div class="wrap">
+    <div class="panel">
+      <div class="panelHead">
+        <h2 id="panelTitle">Loading…</h2>
+        <div class="small" id="panelSub">—</div>
+      </div>
+
+      <div id="panelBody"></div>
+
+      <div class="navRow" id="navRow" style="display:none;">
+        <button id="btnPrev" class="btn secondary">← Prev</button>
+        <button id="btnNext" class="btn secondary">Next →</button>
       </div>
     </div>
   </div>
-</section>
 
-<script src="script.js"></script>
-</body>
-</html>
+  <!-- image modal -->
+  <div id="imgModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modalCard">
+      <img id="imgModalImg" alt="">
+      <div class="cap" id="imgModalCap">—</div>
+      <div class="cap2" id="imgModalCap2">Tap outside to close</div>
+    </div>
+  </div>
+
+<script>
