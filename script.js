@@ -8,18 +8,17 @@ const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
 
-// We will ALSO use the sheet column "imageUrl" directly.
-// ImageLookup is optional; left out on purpose to remove variables.
-
 const $ = id => document.getElementById(id);
 
-let MODE = 'pack';
 let orders = [];
 let orderIndex = 0;
-let pickQueue = [];
-let pickIndex = 0;
+let queue = [];
+let queueIndex = 0;
 
-const STORAGE_KEY = 'dw_picked_final_v1';
+// Undo stack: { orderId, key, prevValue, newValue, prevQueueIndex }
+let undoStack = [];
+
+const STORAGE_KEY = 'dw_picked_queue_v1';
 
 // =========================================================
 // UTILS
@@ -33,23 +32,17 @@ function setError(msg){
 function normalizeText(s){
   return safe(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
 }
-
-function normalizeKey(title, variant){
-  return normalizeText(title) + '|' + normalizeText(variant);
+function itemKey(itemTitle, variantTitle){
+  return normalizeText(itemTitle) + '|' + normalizeText(variantTitle);
 }
 
 function toIntQty(x){
   const n = parseInt(safe(x).replace(/[^\d-]/g,''), 10);
   return Number.isFinite(n) ? n : 0;
 }
-
 function parseBool(x){
   const v = safe(x).toLowerCase();
   return v === 'true' || v === '1' || v === 'yes';
-}
-
-function canLabel(n){
-  return n === 1 ? '1 can' : `${n} cans`;
 }
 
 function firstNameInitial(fullName){
@@ -59,7 +52,6 @@ function firstNameInitial(fullName){
   if(parts.length === 1) return parts[0];
   return `${parts[0]} ${parts[parts.length-1][0]}.`;
 }
-
 function cityProvince(address){
   const a = safe(address);
   if(!a) return '—';
@@ -69,82 +61,108 @@ function cityProvince(address){
   return a;
 }
 
-function loadPicked(){
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-  catch { return {}; }
-}
-
-function savePicked(obj){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-}
-
-function guessAisle(title){
-  const t = safe(title).toUpperCase();
-  const ch = (t.match(/[A-Z]/) || ['?'])[0];
-  if(ch >= 'A' && ch <= 'H') return 'Aisle 1';
-  if(ch >= 'I' && ch <= 'Q') return 'Aisle 2';
-  if(ch >= 'R' && ch <= 'Z') return 'Aisle 3';
-  return 'Aisle ?';
-}
-
 function placeholderSvg(title){
   const t = safe(title).slice(0,28);
   return `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300">
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320">
       <rect width="100%" height="100%" fill="#f3f4f6"/>
       <text x="50%" y="48%" text-anchor="middle" font-family="Arial" font-size="18" fill="#6b7280" font-weight="700">NO IMAGE</text>
       <text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="12" fill="#9ca3af" font-weight="700">${t}</text>
     </svg>
   `);
 }
-
 function resolveImage(url, title){
   const u = safe(url);
   if(u && u.startsWith('http')) return u;
   return placeholderSvg(title);
 }
 
-function escapeHtml(str){
-  return (str ?? '').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#039;");
-}
-function escapeAttr(str){ return escapeHtml(str).replaceAll('"','&quot;'); }
-
-// =========================================================
-// FETCH + BUILD
-// =========================================================
 async function fetchJson(url){
   const res = await fetch(url);
   if(!res.ok) throw new Error(`Fetch failed: ${res.status}`);
   return res.json();
 }
 
+// =========================================================
+// AISLE PATH (DEFAULT) — swap this later with your real map
+// =========================================================
+function guessAisle(title){
+  const t = safe(title).toUpperCase();
+  const ch = (t.match(/[A-Z]/) || ['?'])[0];
+  // snake-ish buckets
+  if(ch >= 'A' && ch <= 'H') return { aisle:'Aisle 1', sort:1 };
+  if(ch >= 'I' && ch <= 'Q') return { aisle:'Aisle 2', sort:2 };
+  if(ch >= 'R' && ch <= 'Z') return { aisle:'Aisle 3', sort:3 };
+  return { aisle:'Aisle ?', sort:99 };
+}
+
+// =========================================================
+// PICKED STATE
+// =========================================================
+function loadPicked(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function savePicked(obj){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+}
+
+function isPicked(orderId, key){
+  const p = loadPicked();
+  return !!(p[orderId] && p[orderId][key]);
+}
+function setPicked(orderId, key, val){
+  const p = loadPicked();
+  if(!p[orderId]) p[orderId] = {};
+  p[orderId][key] = !!val;
+  savePicked(p);
+}
+
+// =========================================================
+// BOX BREAKDOWN (24 / 12 / 6 / remainder)
+// =========================================================
+function boxBreakdown(totalCans){
+  let n = Math.max(0, totalCans|0);
+  const out = { b24:0, b12:0, b6:0, loose:0 };
+
+  out.b24 = Math.floor(n / 24);
+  n = n % 24;
+
+  // choose best fit for remainder
+  if(n === 0) return out;
+  if(n <= 6){ out.b6 = 1; out.loose = n; return out; }
+  if(n <= 12){ out.b12 = 1; out.loose = n; return out; }
+  // 13–23 → use another 24 and leave space (fastest IRL)
+  out.b24 += 1;
+  out.loose = n;
+  return out;
+}
+function boxLabel(totalCans){
+  const b = boxBreakdown(totalCans);
+  const parts = [];
+  if(b.b24) parts.push(`${b.b24}×24`);
+  if(b.b12) parts.push(`${b.b12}×12`);
+  if(b.b6)  parts.push(`${b.b6}×6`);
+  if(!parts.length) parts.push('0');
+  return parts.join(' + ');
+}
+
+// =========================================================
+// PARSE SHEET
+// =========================================================
 function buildHeaderMap(headerRow){
   const map = {};
-  headerRow.forEach((h, idx)=>{
-    map[normalizeText(h)] = idx;
-  });
+  headerRow.forEach((h, idx)=> map[normalizeText(h)] = idx);
   return map;
 }
-
 function mustHaveHeaders(hmap){
-  // EXACTLY your sheet’s headers (normalized)
-  const required = [
-    'orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'
-  ];
+  const required = ['orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'];
   const missing = required.filter(k => !(k in hmap));
-  if(missing.length){
-    throw new Error(`Orders sheet header mismatch. Missing: ${missing.join(', ')}`);
-  }
+  if(missing.length) throw new Error(`Sheet headers missing: ${missing.join(', ')}`);
 }
-
 function rowToObj(row, hmap){
   const get = key => row[hmap[key]] ?? '';
-  const obj = {
+  const r = {
     orderId: safe(get('orderid')),
     customerName: safe(get('customername')),
     address: safe(get('address')),
@@ -155,12 +173,9 @@ function rowToObj(row, hmap){
     notes: safe(get('notes')),
     imageUrl: safe(get('imageurl')),
   };
-
-  // drop garbage / blank rows
-  if(!obj.orderId && !obj.itemTitle && !obj.customerName) return null;
-  if(normalizeText(obj.itemTitle) === 'itemtitle') return null;
-
-  return obj;
+  if(!r.orderId && !r.itemTitle && !r.customerName) return null;
+  if(normalizeText(r.itemTitle) === 'itemtitle') return null;
+  return r;
 }
 
 function buildOrders(rows){
@@ -188,36 +203,26 @@ function buildOrders(rows){
       if(!r.itemTitle) continue;
       if(r.qty <= 0) continue;
 
-      const key = normalizeKey(r.itemTitle, r.variantTitle);
-
-      if(!merged.has(key)){
-        merged.set(key, {
+      const k = itemKey(r.itemTitle, r.variantTitle);
+      if(!merged.has(k)){
+        const aisle = guessAisle(r.itemTitle);
+        merged.set(k, {
+          key: k,
           itemTitle: r.itemTitle,
           variantTitle: r.variantTitle,
           qty: 0,
-          aisle: guessAisle(r.itemTitle),
-          picked: false,
-          imageUrl: r.imageUrl
+          aisle: aisle.aisle,
+          aisleSort: aisle.sort,
+          imageResolved: resolveImage(r.imageUrl, r.itemTitle)
         });
       }
-
-      const it = merged.get(key);
-      it.qty += r.qty;
-
-      // keep first real URL we see
-      if(!it.imageUrl && r.imageUrl) it.imageUrl = r.imageUrl;
+      merged.get(k).qty += r.qty;
     }
 
-    const items = Array.from(merged.values())
-      .map(it => ({
-        ...it,
-        imageResolved: resolveImage(it.imageUrl, it.itemTitle)
-      }))
-      .sort((a,b)=>{
-        const aa = a.aisle.localeCompare(b.aisle);
-        if(aa !== 0) return aa;
-        return a.itemTitle.localeCompare(b.itemTitle);
-      });
+    const items = Array.from(merged.values()).sort((a,b)=>{
+      if(a.aisleSort !== b.aisleSort) return a.aisleSort - b.aisleSort;
+      return a.itemTitle.localeCompare(b.itemTitle);
+    });
 
     out.push({
       orderId: o.orderId,
@@ -228,271 +233,233 @@ function buildOrders(rows){
     });
   }
 
-  // stable newest-ish by orderId string
   out.sort((a,b)=> (a.orderId > b.orderId ? -1 : 1));
   return out;
 }
 
-function applyPickedState(){
-  const picked = loadPicked();
-  orders.forEach(o=>{
-    const po = picked[o.orderId] || {};
-    o.items.forEach(it=>{
-      const k = normalizeKey(it.itemTitle, it.variantTitle);
-      it.picked = !!po[k];
-    });
-  });
-}
-
-function setItemPicked(orderId, item, val){
-  const picked = loadPicked();
-  if(!picked[orderId]) picked[orderId] = {};
-  const k = normalizeKey(item.itemTitle, item.variantTitle);
-  picked[orderId][k] = !!val;
-  savePicked(picked);
-
-  const o = orders[orderIndex];
-  const target = o.items.find(x => normalizeKey(x.itemTitle,x.variantTitle) === k);
-  if(target) target.picked = !!val;
-}
-
 // =========================================================
-// UI
+// QUEUE + RENDER
 // =========================================================
 function currentOrder(){ return orders[orderIndex]; }
 
-function calcTotals(order){
-  const total = order.items.reduce((s,it)=> s + it.qty, 0);
-  const picked = order.items.reduce((s,it)=> s + (it.picked ? it.qty : 0), 0);
+function rebuildQueue(){
+  const o = currentOrder();
+  if(!o) { queue=[]; queueIndex=0; return; }
+
+  // queue = unpicked items in aisle order
+  queue = o.items.filter(it => !isPicked(o.orderId, it.key));
+  queueIndex = Math.min(queueIndex, Math.max(0, queue.length - 1));
+}
+
+function totalsForOrder(o){
+  const total = o.items.reduce((s,it)=> s + it.qty, 0);
+  const picked = o.items.reduce((s,it)=> s + (isPicked(o.orderId, it.key) ? it.qty : 0), 0);
   return { total, picked };
 }
 
-function boxesRequired(totalCans){
-  if(totalCans <= 0) return '0';
-  const full24 = Math.floor(totalCans / 24);
-  const rem = totalCans % 24;
-  const parts = [];
-  if(full24) parts.push(`${full24}×24-pack`);
-  if(rem) parts.push(`1×${rem}-pack`);
-  return parts.join(' + ');
-}
-
-function updateOrderStrip(){
+function setOrderBar(){
   const o = currentOrder();
-  if(!o){ $('orderStrip').style.display='none'; return; }
-  $('orderStrip').style.display='block';
+  if(!o){ $('orderCard').style.display='none'; return; }
+  $('orderCard').style.display='block';
 
-  const {total,picked} = calcTotals(o);
+  const { total, picked } = totalsForOrder(o);
   const pct = total ? Math.round((picked/total)*100) : 0;
 
-  $('stripNameCity').textContent = `${firstNameInitial(o.customerName)} · ${cityProvince(o.address)}`;
-  $('stripMeta').textContent = `#${o.orderId} · ${total} cans · ${boxesRequired(total)}`;
-  $('stripPill').textContent = `${pct}%`;
+  $('whoLine').textContent = `${firstNameInitial(o.customerName)} · ${cityProvince(o.address)}`;
+  $('addrLine').textContent = safe(o.address) || '—';
+  $('chipOrder').textContent = `#${o.orderId}`;
+  $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
+  $('chipProgress').textContent = `${pct}%`;
 
   $('progressFill').style.width = `${pct}%`;
   $('progressLeft').textContent = `${picked} picked`;
   $('progressRight').textContent = `${total} total`;
-
-  $('fullAddress').innerHTML =
-    `<div>${escapeHtml(o.customerName || '—')}</div>
-     <div class="muted">${escapeHtml(o.address || '—')}</div>`;
-
-  $('kvOrder').textContent = `#${o.orderId}`;
-  $('kvBoxes').textContent = boxesRequired(total);
-  $('kvCans').textContent = `${total}`;
-  $('kvMode').textContent = MODE === 'picker' ? 'Picker' : 'Pack';
 }
 
-function buildPickQueue(){
+function renderList(){
   const o = currentOrder();
-  pickQueue = o.items.filter(it => !it.picked);
-  pickIndex = 0;
+  if(!o) { $('listBody').innerHTML=''; return; }
+
+  $('listBody').innerHTML = o.items.map((it, idx)=>{
+    const done = isPicked(o.orderId, it.key);
+    return `
+      <div class="listRow ${done ? 'done' : ''}" data-key="${it.key}">
+        <div>
+          <div class="lTitle">${escapeHtml(it.itemTitle)}</div>
+          <div class="lSub">${escapeHtml(it.aisle)}${it.variantTitle ? ' · ' + escapeHtml(it.variantTitle) : ''}</div>
+        </div>
+        <div class="lQty">${it.qty}</div>
+      </div>
+    `;
+  }).join('');
+
+  $('listBody').querySelectorAll('.listRow').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const k = row.getAttribute('data-key');
+      const pos = queue.findIndex(q => q.key === k);
+      if(pos >= 0){ queueIndex = pos; renderAll(); }
+    });
+  });
 }
 
-function openImgModal(item){
-  $('imgModalImg').src = item.imageResolved;
-  $('imgModalCap').textContent = item.itemTitle;
-  $('imgModal').classList.add('show');
+function escapeHtml(str){
+  return (str ?? '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
 }
 
-function render(){
-  setError('');
+function setNextCard(n, item, titleId, qtyId, subId){
+  if(!item){
+    $(titleId).textContent = '—';
+    $(qtyId).textContent = '—';
+    $(subId).textContent = '—';
+    return;
+  }
+  $(titleId).textContent = item.itemTitle;
+  $(qtyId).textContent = item.qty;
+  $(subId).textContent = `${item.aisle}${item.variantTitle ? ' · ' + item.variantTitle : ''}`;
+}
 
+function renderCurrent(){
   const o = currentOrder();
   if(!o){
-    $('panelTitle').textContent = 'No orders found';
-    $('panelSub').textContent = '';
-    $('panelBody').innerHTML = `<div class="empty">No valid orders in sheet.</div>`;
-    $('navRow').style.display='none';
-    $('orderStrip').style.display='none';
+    $('curTitle').textContent = 'No orders found';
+    $('curSub').innerHTML = '';
+    $('curQty').textContent = '—';
+    $('curImg').src = '';
     return;
   }
 
-  updateOrderStrip();
-  $('navRow').style.display = 'flex';
+  rebuildQueue();
+  setOrderBar();
+  renderList();
 
-  if(MODE === 'picker'){
-    $('panelTitle').textContent = 'Picker Mode';
+  const cur = queue[queueIndex];
 
-    buildPickQueue();
-
-    if(pickQueue.length === 0){
-      $('panelSub').textContent = `Order ${orderIndex+1} / ${orders.length}`;
-      $('panelBody').innerHTML = `
-        <div class="pickerCard">
-          <div class="bigQty">
-            <div class="num">DONE</div>
-            <div class="lbl">ORDER PICKED</div>
-          </div>
-          <div class="titleBlock">
-            <div class="name">Everything is picked for this order.</div>
-            <div class="sub"><span class="tag">Switch to Pack Mode to box it.</span></div>
-          </div>
-          <div class="confirmRow">
-            <button class="btn btnWide" id="goPack">Go to Pack Mode</button>
-          </div>
-        </div>
-      `;
-      $('goPack').addEventListener('click', ()=> setMode('pack'));
-      return;
-    }
-
-    const it = pickQueue[pickIndex];
-    const left = pickQueue.length - pickIndex;
-    $('panelSub').textContent = `Order ${orderIndex+1}/${orders.length} · ${left} picks left`;
-
-    $('panelBody').innerHTML = `
-      <div class="pickerCard">
-        <div class="bigQty">
-          <div class="num">${it.qty}</div>
-          <div class="lbl">CANS</div>
-        </div>
-
-        <div class="imgBox">
-          <img id="pickerImg" src="${it.imageResolved}" alt="${escapeHtml(it.itemTitle)}">
-        </div>
-
-        <div class="titleBlock">
-          <div class="name">${escapeHtml(it.itemTitle)}</div>
-          <div class="sub">
-            <span class="tag">${escapeHtml(it.aisle)}</span>
-            ${it.variantTitle ? `<span class="tag">${escapeHtml(it.variantTitle)}</span>` : ''}
-          </div>
-        </div>
-
-        <div class="confirmRow">
-          <button class="btn btnWide ok" id="btnConfirmPick">CONFIRM PICK</button>
-          <button class="btn btnWide danger" id="btnSkipPick">SKIP</button>
-        </div>
-      </div>
-    `;
-
-    $('pickerImg').addEventListener('click', ()=> openImgModal(it));
-    $('btnConfirmPick').addEventListener('click', ()=>{
-      setItemPicked(o.orderId, it, true);
-      render();
-    });
-    $('btnSkipPick').addEventListener('click', ()=>{
-      pickIndex = Math.min(pickIndex + 1, pickQueue.length - 1);
-      render();
-    });
-
-  } else {
-    $('panelTitle').textContent = 'Pack Mode';
-
-    const {total,picked} = calcTotals(o);
-    $('panelSub').textContent = `Order ${orderIndex+1}/${orders.length} · ${picked}/${total} cans picked`;
-
-    const rowsHtml = o.items.map(it=>{
-      const done = it.picked ? 'done' : '';
-      const label = it.picked ? 'PICKED' : canLabel(it.qty);
-      return `
-        <div class="row" data-key="${escapeAttr(normalizeKey(it.itemTitle,it.variantTitle))}">
-          <div class="thumb"><img src="${it.imageResolved}" alt="${escapeHtml(it.itemTitle)}"></div>
-          <div>
-            <div class="rTitle">${escapeHtml(it.itemTitle)}</div>
-            <div class="rSub">
-              <span class="tag">${escapeHtml(it.aisle)}</span>
-              ${it.variantTitle ? `<span class="tag">${escapeHtml(it.variantTitle)}</span>` : ''}
-            </div>
-          </div>
-          <button class="qtyBtn ${done}" data-action="toggle">${escapeHtml(label)}</button>
-        </div>
-      `;
-    }).join('');
-
-    $('panelBody').innerHTML = rowsHtml || `<div class="empty">No items found.</div>`;
-
-    $('panelBody').querySelectorAll('.row').forEach(row=>{
-      const k = row.getAttribute('data-key');
-      const it = o.items.find(x => normalizeKey(x.itemTitle,x.variantTitle) === k);
-      if(!it) return;
-
-      row.querySelector('img').addEventListener('click', ()=> openImgModal(it));
-      row.querySelector('[data-action="toggle"]').addEventListener('click', ()=>{
-        setItemPicked(o.orderId, it, !it.picked);
-        render();
-      });
-    });
+  if(!cur){
+    $('curTitle').textContent = 'DONE — order picked';
+    $('curSub').innerHTML = `<span class="badge">Grab boxes: ${boxLabel(totalsForOrder(o).total)}</span>`;
+    $('curQty').textContent = '✔';
+    $('curImg').src = resolveImage('', 'DONE');
+    setNextCard(1, null, 'n1Title','n1Qty','n1Sub');
+    setNextCard(2, null, 'n2Title','n2Qty','n2Sub');
+    return;
   }
 
-  $('btnPrev').onclick = ()=> { if(orderIndex>0){ orderIndex--; render(); } };
-  $('btnNext').onclick = ()=> { if(orderIndex<orders.length-1){ orderIndex++; render(); } };
+  $('curTitle').textContent = cur.itemTitle;
+  $('curSub').innerHTML =
+    `<span class="badge">${escapeHtml(cur.aisle)}</span>` +
+    (cur.variantTitle ? `<span class="badge">${escapeHtml(cur.variantTitle)}</span>` : '');
+
+  $('curQty').textContent = cur.qty;
+  $('curImg').src = cur.imageResolved;
+
+  setNextCard(1, queue[queueIndex+1], 'n1Title','n1Qty','n1Sub');
+  setNextCard(2, queue[queueIndex+2], 'n2Title','n2Qty','n2Sub');
 }
 
-function setMode(m){
-  MODE = m;
-  $('btnPicker').classList.toggle('secondary', MODE !== 'picker');
-  $('btnPack').classList.toggle('secondary', MODE !== 'pack');
-  render();
+function renderAll(){
+  setError('');
+  renderCurrent();
 }
 
-// Modal close
-$('imgModal').addEventListener('click', (e)=>{
-  if(e.target.id === 'imgModal') $('imgModal').classList.remove('show');
-});
+// =========================================================
+// ACTIONS (ONE TAP PICK, AUTO ADVANCE)
+// =========================================================
+function pickCurrent(){
+  const o = currentOrder();
+  if(!o) return;
+  rebuildQueue();
+  const cur = queue[queueIndex];
+  if(!cur) return;
 
-// Strip toggle
-$('orderStripTop').addEventListener('click', ()=>{
-  const d = $('orderStripDetail');
-  const open = d.classList.toggle('show');
-  $('stripCaret').textContent = open ? '▴' : '▾';
-});
+  const prev = isPicked(o.orderId, cur.key);
+  const prevIndex = queueIndex;
+
+  setPicked(o.orderId, cur.key, true);
+  undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, newValue:true, prevQueueIndex:prevIndex });
+
+  // advance to next item automatically (same index now points to next because queue shrinks)
+  renderAll();
+}
+
+function skipCurrent(){
+  const o = currentOrder();
+  if(!o) return;
+  rebuildQueue();
+  if(queue.length === 0) return;
+  queueIndex = Math.min(queueIndex + 1, queue.length - 1);
+  renderAll();
+}
+
+function undoLast(){
+  const u = undoStack.pop();
+  if(!u) return;
+
+  setPicked(u.orderId, u.key, u.prevValue);
+
+  // restore position if still on same order
+  const o = currentOrder();
+  if(o && o.orderId === u.orderId){
+    rebuildQueue();
+    const pos = queue.findIndex(q => q.key === u.key);
+    queueIndex = pos >= 0 ? pos : Math.min(u.prevQueueIndex, Math.max(0, queue.length - 1));
+  }
+
+  renderAll();
+}
+
+function prevOrder(){
+  if(orderIndex > 0){
+    orderIndex--;
+    queueIndex = 0;
+    undoStack = [];
+    renderAll();
+  }
+}
+function nextOrder(){
+  if(orderIndex < orders.length - 1){
+    orderIndex++;
+    queueIndex = 0;
+    undoStack = [];
+    renderAll();
+  }
+}
 
 // =========================================================
 // INIT
 // =========================================================
 async function init(){
   try{
-    $('btnPicker').addEventListener('click', ()=> setMode('picker'));
-    $('btnPack').addEventListener('click', ()=> setMode('pack'));
-    $('btnPicker').classList.add('secondary');
+    $('btnPicked').addEventListener('click', pickCurrent);
+    $('btnSkip').addEventListener('click', skipCurrent);
+    $('btnUndo').addEventListener('click', undoLast);
+    $('btnPrevOrder').addEventListener('click', prevOrder);
+    $('btnNextOrder').addEventListener('click', nextOrder);
 
     const j = await fetchJson(ordersUrl);
     const values = j.values || [];
     if(values.length < 2) throw new Error('Orders sheet has no data.');
 
-    const headerRow = values[0];
-    const hmap = buildHeaderMap(headerRow);
+    const hmap = buildHeaderMap(values[0]);
     mustHaveHeaders(hmap);
 
-    const rows = values.slice(1)
-      .map(r => rowToObj(r, hmap))
-      .filter(Boolean);
-
+    const rows = values.slice(1).map(r => rowToObj(r, hmap)).filter(Boolean);
     orders = buildOrders(rows);
-    applyPickedState();
 
     if(!orders.length){
       setError('No valid orders built. Check orderid + itemTitle + qty columns.');
     }
 
-    setMode('pack');
+    renderAll();
   }catch(e){
     setError(e.message);
-    $('panelTitle').textContent = 'Error';
-    $('panelBody').innerHTML = `<div class="empty">Fix sheet headers/data and reload.</div>`;
-    $('navRow').style.display='none';
+    $('curTitle').textContent = 'Error';
+    $('curSub').textContent = 'Fix the sheet and reload.';
+    $('curQty').textContent = '—';
   }
 }
 
