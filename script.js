@@ -34,8 +34,13 @@ function setError(msg){
 function normalizeText(s){
   return safe(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
 }
-function itemKey(itemTitle, variantTitle){
-  return normalizeText(itemTitle) + '|' + normalizeText(variantTitle);
+
+/**
+ * NEW: merge by can title only (NOT variant)
+ * This is the key change that combines singles + 4-packs + 12-packs into total cans.
+ */
+function itemKeyByTitle(itemTitle){
+  return normalizeText(itemTitle);
 }
 
 function toIntQty(x){
@@ -86,6 +91,54 @@ async function fetchJson(url){
 }
 
 // =========================================================
+// PACK SIZE PARSING (convert packs -> cans)
+// =========================================================
+function parsePackSize(itemTitle, variantTitle){
+  const s = `${safe(itemTitle)} ${safe(variantTitle)}`.toLowerCase();
+
+  // explicit singles
+  if(/\bsingle\b/.test(s) || /\bcan\b/.test(s) || /\b1 pack\b/.test(s)) return 1;
+
+  // common patterns: "12 pack", "12-pack", "12pk", "12 x 355", "case (12 x ...)"
+  const m1 = s.match(/(\d+)\s*[- ]?\s*(pack|pk)\b/);
+  if(m1) return clampPack(parseInt(m1[1], 10));
+
+  const m2 = s.match(/\b(\d+)\s*x\s*\d+/); // "12 x 355"
+  if(m2) return clampPack(parseInt(m2[1], 10));
+
+  const m3 = s.match(/\bcase\s*\(\s*(\d+)\s*x/i); // "Case (12 x 355 ml)"
+  if(m3) return clampPack(parseInt(m3[1], 10));
+
+  // fallback: sometimes variant is literally "12" or "24"
+  const m4 = safe(variantTitle).trim().match(/^(\d{1,3})$/);
+  if(m4) return clampPack(parseInt(m4[1], 10));
+
+  // default: treat as single can
+  return 1;
+}
+
+function clampPack(n){
+  // Prevent insane multipliers from bad strings
+  if(!Number.isFinite(n) || n <= 0) return 1;
+  if(n > 60) return 1;
+  return n;
+}
+
+function formatSourceBreakdown(sources){
+  // sources = [{units, packSize, cans}]
+  // output example: "2×12 + 1×1"
+  const map = new Map(); // key: packSize, val: units
+  for(const src of sources){
+    const p = src.packSize || 1;
+    map.set(p, (map.get(p) || 0) + (src.units || 0));
+  }
+  const parts = Array.from(map.entries())
+    .sort((a,b)=> b[0] - a[0])
+    .map(([pack, units]) => `${units}×${pack}`);
+  return parts.join(' + ');
+}
+
+// =========================================================
 // AISLE PATH (PLACEHOLDER)
 // =========================================================
 function guessAisle(title){
@@ -119,7 +172,7 @@ function setPicked(orderId, key, val){
 }
 
 // =========================================================
-// BOX BREAKDOWN (24 / 12 / 6 only)
+// BOX BREAKDOWN (24 / 12 / 6 only) — uses TOTAL CANS now
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -163,13 +216,21 @@ function mustHaveHeaders(hmap){
 }
 function rowToObj(row, hmap){
   const get = key => row[hmap[key]] ?? '';
+  const itemTitle = safe(get('itemtitle'));
+  const variantTitle = safe(get('varianttitle'));
+  const units = toIntQty(get('qty'));
+  const packSize = parsePackSize(itemTitle, variantTitle);
+  const cans = units * packSize;
+
   const r = {
     orderId: safe(get('orderid')),
     customerName: safe(get('customername')),
     address: safe(get('address')),
-    itemTitle: safe(get('itemtitle')),
-    variantTitle: safe(get('varianttitle')),
-    qty: parseInt(safe(get('qty')).replace(/[^\d-]/g,''),10) || 0,
+    itemTitle,
+    variantTitle,
+    units,
+    packSize,
+    cans,
     picked: parseBool(get('picked')),
     notes: safe(get('notes')),
     imageUrl: safe(get('imageurl')),
@@ -202,22 +263,33 @@ function buildOrders(rows){
 
     for(const r of o.itemsRaw){
       if(!r.itemTitle) continue;
-      if(r.qty <= 0) continue;
+      if(r.cans <= 0) continue;
 
-      const k = itemKey(r.itemTitle, r.variantTitle);
+      // ✅ merge by title only
+      const k = itemKeyByTitle(r.itemTitle);
+
       if(!merged.has(k)){
         const aisle = guessAisle(r.itemTitle);
         merged.set(k, {
           key: k,
           itemTitle: r.itemTitle,
-          variantTitle: r.variantTitle,
-          qty: 0,
+          qtyCans: 0,                     // ✅ total cans
           aisle: aisle.aisle,
           aisleSort: aisle.sort,
-          imageResolved: resolveImage(r.imageUrl, r.itemTitle)
+          imageResolved: resolveImage(r.imageUrl, r.itemTitle),
+          sources: []                     // units + packSize breakdown
         });
       }
-      merged.get(k).qty += r.qty;
+
+      const item = merged.get(k);
+
+      // keep first real image if one exists
+      if(item.imageResolved.startsWith('data:image') && r.imageUrl && r.imageUrl.startsWith('http')){
+        item.imageResolved = r.imageUrl;
+      }
+
+      item.qtyCans += r.cans;
+      item.sources.push({ units: r.units, packSize: r.packSize, cans: r.cans });
     }
 
     const items = Array.from(merged.values()).sort((a,b)=>{
@@ -253,8 +325,8 @@ function rebuildQueue(){
 }
 
 function totalsForOrder(o){
-  const total = o.items.reduce((s,it)=> s + it.qty, 0);
-  const picked = o.items.reduce((s,it)=> s + (isPicked(o.orderId, it.key) ? it.qty : 0), 0);
+  const total = o.items.reduce((s,it)=> s + it.qtyCans, 0); // ✅ cans
+  const picked = o.items.reduce((s,it)=> s + (isPicked(o.orderId, it.key) ? it.qtyCans : 0), 0);
   return { total, picked };
 }
 
@@ -292,13 +364,14 @@ function renderList(){
 
   $('listBody').innerHTML = o.items.map((it)=>{
     const done = isPicked(o.orderId, it.key);
+    const src = it.sources?.length ? ` · ${escapeHtml(formatSourceBreakdown(it.sources))}` : '';
     return `
       <div class="listRow ${done ? 'done' : ''}" data-key="${it.key}">
         <div>
           <div class="lTitle">${escapeHtml(it.itemTitle)}</div>
-          <div class="lSub">${escapeHtml(it.aisle)}${it.variantTitle ? ' · ' + escapeHtml(it.variantTitle) : ''}</div>
+          <div class="lSub">${escapeHtml(it.aisle)}${src}</div>
         </div>
-        <div class="lQty">${it.qty}</div>
+        <div class="lQty">${it.qtyCans}</div>
       </div>
     `;
   }).join('');
@@ -320,7 +393,7 @@ function setNextCard(item, titleId, qtyId, aisleId, imgId){
     if($(titleId)) $(titleId).textContent = '—';
     return;
   }
-  $(qtyId).textContent = `${item.qty}`;
+  $(qtyId).textContent = `${item.qtyCans}`;  // ✅ total cans
   $(aisleId).textContent = item.aisle;
   $(imgId).src = item.imageResolved;
   if($(titleId)) $(titleId).textContent = item.itemTitle;
@@ -355,11 +428,13 @@ function renderCurrent(){
   }
 
   $('curTitle').textContent = cur.itemTitle;
+
+  const srcText = cur.sources?.length ? formatSourceBreakdown(cur.sources) : '';
   $('curSub').innerHTML =
     `<span class="badge">${escapeHtml(cur.aisle)}</span>` +
-    (cur.variantTitle ? `<span class="badge">${escapeHtml(cur.variantTitle)}</span>` : '');
+    (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
-  $('curQty').textContent = cur.qty;
+  $('curQty').textContent = cur.qtyCans;      // ✅ total cans
   $('curImg').src = cur.imageResolved;
 
   setNextCard(queue[queueIndex+1], 'n1Title','n1Qty','n1Aisle','n1Img');
@@ -449,7 +524,7 @@ async function init(){
     $('btnPrevOrder').addEventListener('click', prevOrder);
     $('btnNextOrder').addEventListener('click', nextOrder);
 
-    // NEW: hero Next button triggers pick+advance
+    // hero “Next →” = pick current (mark picked + advance)
     $('btnPickNext').addEventListener('click', pickCurrent);
 
     $('next1').addEventListener('click', ()=> jumpNext(1));
