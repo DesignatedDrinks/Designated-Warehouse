@@ -13,13 +13,10 @@ const $ = id => document.getElementById(id);
 let orders = [];
 let orderIndex = 0;
 
-// queue = unpicked items in aisle order
 let queue = [];
 let queueIndex = 0;
 
-// Undo stack: { orderId, key, prevValue, prevQueueIndex }
 let undoStack = [];
-
 const STORAGE_KEY = 'dw_picked_queue_v1';
 
 // =========================================================
@@ -35,10 +32,7 @@ function normalizeText(s){
   return safe(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
 }
 
-/**
- * Merge by can title only (NOT variant)
- * Combines single + 4-pack + 12-pack into total cans.
- */
+// Merge by title only
 function itemKeyByTitle(itemTitle){
   return normalizeText(itemTitle);
 }
@@ -101,7 +95,6 @@ function isTemple(title){
   const t = (title || '').toLowerCase();
   return t.includes("temple") || t.includes("templ");
 }
-// 0 = first, 1 = normal, 2 = last
 function brandPriority(title){
   if(isHarmons(title)) return 0;
   if(isTemple(title)) return 2;
@@ -109,31 +102,25 @@ function brandPriority(title){
 }
 
 // =========================================================
-// PACK SIZE PARSING (convert packs -> cans)
+// PACK SIZE PARSING (packs -> cans)
 // =========================================================
 function parsePackSize(itemTitle, variantTitle){
   const s = `${safe(itemTitle)} ${safe(variantTitle)}`.toLowerCase();
 
-  // explicit singles
   if(/\bsingle\b/.test(s) || /\bcan\b/.test(s) || /\b1 pack\b/.test(s)) return 1;
 
-  // patterns: "12 pack", "12-pack", "12pk"
   const m1 = s.match(/(\d+)\s*[- ]?\s*(pack|pk)\b/);
   if(m1) return clampPack(parseInt(m1[1], 10));
 
-  // "12 x 355"
   const m2 = s.match(/\b(\d+)\s*x\s*\d+/);
   if(m2) return clampPack(parseInt(m2[1], 10));
 
-  // "Case (12 x 355 ml)"
   const m3 = s.match(/\bcase\s*\(\s*(\d+)\s*x/i);
   if(m3) return clampPack(parseInt(m3[1], 10));
 
-  // variant literally "12" or "24"
   const m4 = safe(variantTitle).trim().match(/^(\d{1,3})$/);
   if(m4) return clampPack(parseInt(m4[1], 10));
 
-  // default: treat as single can
   return 1;
 }
 
@@ -144,7 +131,7 @@ function clampPack(n){
 }
 
 function formatSourceBreakdown(sources){
-  const map = new Map(); // packSize -> units
+  const map = new Map();
   for(const src of sources){
     const p = src.packSize || 1;
     map.set(p, (map.get(p) || 0) + (src.units || 0));
@@ -156,7 +143,7 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// AISLE PATH (your placeholder map)
+// AISLE PATH (placeholder map)
 // =========================================================
 function guessAisle(title){
   const t = safe(title).toUpperCase();
@@ -189,7 +176,7 @@ function setPicked(orderId, key, val){
 }
 
 // =========================================================
-// BOX BREAKDOWN (24 / 12 / 6 only) — uses TOTAL CANS
+// BOX BREAKDOWN (24 / 12 / 6) — total cans
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -203,7 +190,7 @@ function boxBreakdown(totalCans){
   if(n <= 6){ out.b6 = 1; out.loose = n; return out; }
   if(n <= 12){ out.b12 = 1; out.loose = n; return out; }
 
-  out.b24 += 1; // 13–23 -> grab another 24
+  out.b24 += 1;
   out.loose = n;
   return out;
 }
@@ -281,7 +268,7 @@ function buildOrders(rows){
       if(!r.itemTitle) continue;
       if(r.cans <= 0) continue;
 
-      const k = itemKeyByTitle(r.itemTitle); // ✅ merge by title
+      const k = itemKeyByTitle(r.itemTitle);
 
       if(!merged.has(k)){
         const aisle = guessAisle(r.itemTitle);
@@ -298,7 +285,6 @@ function buildOrders(rows){
 
       const item = merged.get(k);
 
-      // keep first real image if one exists
       if(item.imageResolved.startsWith('data:image') && r.imageUrl && r.imageUrl.startsWith('http')){
         item.imageResolved = r.imageUrl;
       }
@@ -307,7 +293,6 @@ function buildOrders(rows){
       item.sources.push({ units: r.units, packSize: r.packSize, cans: r.cans });
     }
 
-    // ✅ Harmon first, Temple last, then aisle path, then alpha
     const items = Array.from(merged.values()).sort((a,b)=>{
       const pa = brandPriority(a.itemTitle);
       const pb = brandPriority(b.itemTitle);
@@ -338,7 +323,6 @@ function currentOrder(){ return orders[orderIndex]; }
 function rebuildQueue(){
   const o = currentOrder();
   if(!o) { queue=[]; queueIndex=0; return; }
-
   queue = o.items.filter(it => !isPicked(o.orderId, it.key));
   if(queueIndex < 0) queueIndex = 0;
   if(queueIndex > queue.length - 1) queueIndex = Math.max(0, queue.length - 1);
@@ -419,7 +403,10 @@ function setNextCard(item, qtyId, aisleId, imgId){
 
 function renderCurrent(){
   const o = currentOrder();
+  const nextBtn = $('btnPickNext');
+
   if(!o){
+    nextBtn.style.visibility = 'visible';
     $('curTitle').textContent = 'No orders found';
     $('curSub').innerHTML = '';
     $('curQty').textContent = '—';
@@ -436,6 +423,9 @@ function renderCurrent(){
   const cur = queue[queueIndex];
 
   if(!cur){
+    // ✅ hide breathing next button on DONE
+    nextBtn.style.visibility = 'hidden';
+
     $('curTitle').textContent = 'DONE — order picked';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curQty').textContent = '✔';
@@ -444,6 +434,9 @@ function renderCurrent(){
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
     return;
   }
+
+  // show next button during picking
+  nextBtn.style.visibility = 'visible';
 
   $('curTitle').textContent = cur.itemTitle;
 
@@ -542,7 +535,6 @@ async function init(){
     $('btnPrevOrder').addEventListener('click', prevOrder);
     $('btnNextOrder').addEventListener('click', nextOrder);
 
-    // hero “Next →” = mark picked + advance
     $('btnPickNext').addEventListener('click', pickCurrent);
 
     $('next1').addEventListener('click', ()=> jumpNext(1));
