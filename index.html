@@ -54,7 +54,15 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <div class="qtyBig qtyBreathe" id="curQty">—</div>
+          <!-- Main qty / DONE Next button -->
+          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
+            <div class="qtyNumber" id="curQtyNumber">—</div>
+
+            <div class="qtyDone" id="curQtyDone" style="display:none;">
+              <div class="qtyCheck">✔</div>
+              <div class="qtyNext">NEXT</div>
+            </div>
+          </button>
         </div>
 
         <div class="heroPick">
@@ -71,7 +79,7 @@
         <div class="nextRow">
           <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
             <div class="miniTop">
-              <div class="miniQty" id="n1Qty">—</div>
+              <div class="miniQty miniQtyRed" id="n1Qty">—</div>
               <div class="miniAisle" id="n1Aisle">—</div>
             </div>
             <div class="miniThumb">
@@ -81,7 +89,7 @@
 
           <button class="card nextTap" id="next2" type="button" aria-label="Next item 2">
             <div class="miniTop">
-              <div class="miniQty" id="n2Qty">—</div>
+              <div class="miniQty miniQtyRed" id="n2Qty">—</div>
               <div class="miniAisle" id="n2Aisle">—</div>
             </div>
             <div class="miniThumb">
