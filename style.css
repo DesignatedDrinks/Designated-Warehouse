@@ -179,7 +179,33 @@ header {
 }
 
 .pick-name { font-size: 1.15rem; font-weight: 900; margin-bottom: 0.55rem; }
-.pick-qty { font-size: 1.85rem; font-weight: 1100; margin-bottom: 0.9rem; }
+
+/* ✅ UPDATED: PICK QUANTITY (BIG BADGE) */
+.pick-qty {
+  font-size: 4.6rem;
+  font-weight: 1100;
+  margin: 0.6rem 0 1rem;
+  line-height: 1;
+  letter-spacing: 2px;
+  color: #fff;
+  background: var(--accent);
+  padding: 18px 22px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.16);
+}
+
+/* Mobile boost */
+@media (max-width: 600px) {
+  .pick-qty {
+    font-size: 5.2rem;
+    padding: 20px 24px;
+    min-width: 160px;
+  }
+}
 
 /* Modal */
 .modal {
@@ -291,6 +317,27 @@ header {
 
 .items-list .details p { margin-bottom: 0.2rem; font-size: 1rem; }
 
+/* ✅ UPDATED: PACK MODE QUANTITY (PILL BADGE) */
+.items-list .details p:last-child {
+  margin-top: 6px;
+  font-size: 1.9rem;
+  font-weight: 1000;
+  color: #fff;
+  background: var(--accent);
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  letter-spacing: 1px;
+}
+
+/* Mobile boost */
+@media (max-width: 600px) {
+  .items-list .details p:last-child {
+    font-size: 2.1rem;
+    padding: 8px 16px;
+  }
+}
+
 .pack-tools { margin-top: 1rem; }
 
 .filter-container { margin: 1rem 0; text-align: center; }
@@ -318,4 +365,3 @@ header {
 .modal.hidden {
   display: none !important;
 }
-
