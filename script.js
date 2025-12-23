@@ -9,16 +9,31 @@ const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A1:Z10000?alt=json&key=${apiKey}`;
 
 // ==================================================
-// DOM SAFE
+// DOM SAFE (ID OR CLASS)
 // ==================================================
-const $ = (id) => document.getElementById(id);
+const byId = (id) => document.getElementById(id);
+const q = (sel) => document.querySelector(sel);
+
+// “Smart” getter: try ID first, then fallback selector
+function getEl(id, fallbackSelector) {
+  return byId(id) || (fallbackSelector ? q(fallbackSelector) : null);
+}
 
 // ==================================================
 // STATE
 // ==================================================
-let orders = [];     // order-centric (for dashboard + pack mode later)
-let pickQueue = [];  // item-centric aggregated list (for picker)
+let orders = [];     // order-centric
+let pickQueue = [];  // item-centric
 let pickIndex = 0;
+
+// ==================================================
+// VIEW CONTROL
+// ==================================================
+function showView(viewId) {
+  const views = ['startView', 'pickView', 'completeView', 'packModeView'];
+  views.forEach(id => byId(id)?.classList.add('hidden'));
+  byId(viewId)?.classList.remove('hidden');
+}
 
 // ==================================================
 // LOCATION LOGIC (QUIET + YOUR WALK ORDER)
@@ -28,38 +43,14 @@ function guessLocation(title) {
   const L = (raw[0] || '').toUpperCase();
   const t = raw.toLowerCase();
 
-  // Pinned exceptions (your physical reality)
+  // Pinned exceptions
   if (t.includes('harmon')) return { label: 'H', sortKey: '00-00' };
   if (t.includes('templ'))  return { label: 'T', sortKey: '00-01' };
 
-  // Groups in physical walk order:
-  // Aisle 1 WALL: B then D then C (you don't care which B skid)
-  const A1_WALL_GROUPS = [
-    ['B'],
-    ['D'],
-    ['C'],
-  ];
-
-  // Aisle 1 ISLAND: O, (M/N), L, (I/J), H, G, F, E
-  const A1_ISLAND_GROUPS = [
-    ['O'],
-    ['M','N'],
-    ['L'],
-    ['I','J'],
-    ['H'],
-    ['G'],
-    ['F'],
-    ['E'],
-  ];
-
-  // Aisle 2 LEFT (one-side picking): P, R, S, T, (U/W)
-  const A2_LEFT_GROUPS = [
-    ['P'],
-    ['R'],
-    ['S'],
-    ['T'],
-    ['U','W'],
-  ];
+  // Groups in physical walk order
+  const A1_WALL_GROUPS = [['B'], ['D'], ['C']];
+  const A1_ISLAND_GROUPS = [['O'], ['M','N'], ['L'], ['I','J'], ['H'], ['G'], ['F'], ['E']];
+  const A2_LEFT_GROUPS = [['P'], ['R'], ['S'], ['T'], ['U','W']];
 
   const rankIn = (groups) => {
     for (let i = 0; i < groups.length; i++) {
@@ -72,17 +63,15 @@ function guessLocation(title) {
   const islandRank = rankIn(A1_ISLAND_GROUPS);
   const a2Rank     = rankIn(A2_LEFT_GROUPS);
 
-  // Sorting priority: Aisle 1 first (wall + island), then Aisle 2
   if (wallRank !== -1)   return { label: L, sortKey: `01-0${wallRank}` };
   if (islandRank !== -1) return { label: L, sortKey: `01-1${islandRank}` };
   if (a2Rank !== -1)     return { label: L, sortKey: `02-0${a2Rank}` };
 
-  // Silent fallback: still show the letter, never "UNKNOWN"
   return { label: L || '?', sortKey: '99-99' };
 }
 
 // ==================================================
-// LOAD + PARSE ORDERS
+// LOAD + PARSE
 // ==================================================
 async function loadOrders() {
   try {
@@ -105,13 +94,13 @@ async function loadOrders() {
       throw new Error('Missing required columns: itemTitle and qty');
     }
 
-    // 1) Build order list (pending only if picked column exists)
-    const orderMap = new Map(); // orderId -> { orderId, items: [...] }
+    // Build orders (pending only if picked column exists)
+    const orderMap = new Map();
 
     for (const r of rows.slice(1)) {
       const pickedVal = (iPicked >= 0 ? r[iPicked] : '').toString().trim().toLowerCase();
       const isPicked = pickedVal === 'true' || pickedVal === 'yes' || pickedVal === '1';
-      if (iPicked >= 0 && isPicked) continue; // only skip if column exists
+      if (iPicked >= 0 && isPicked) continue;
 
       const orderId = (iOrderId >= 0 ? r[iOrderId] : '').toString().trim() || 'NO_ORDER_ID';
       const title = (r[iTitle] || '').toString().trim();
@@ -124,18 +113,13 @@ async function loadOrders() {
 
     orders = Array.from(orderMap.values());
 
-    // 2) Build pickQueue (aggregate by title across pending orders)
-    const itemAgg = new Map(); // normalized title -> { title, qty, loc }
-
+    // Build pickQueue (aggregate by title)
+    const itemAgg = new Map();
     for (const o of orders) {
       for (const it of o.items) {
         const key = it.title.toLowerCase();
         if (!itemAgg.has(key)) {
-          itemAgg.set(key, {
-            title: it.title,
-            qty: 0,
-            loc: guessLocation(it.title),
-          });
+          itemAgg.set(key, { title: it.title, qty: 0, loc: guessLocation(it.title) });
         }
         itemAgg.get(key).qty += it.qty;
       }
@@ -152,32 +136,53 @@ async function loadOrders() {
     renderStart();
   } catch (err) {
     console.error(err);
-    alert(err.message);
+    const startError = byId('startError');
+    if (startError) {
+      startError.classList.remove('hidden');
+      startError.textContent = err.message;
+    } else {
+      alert(err.message);
+    }
   }
 }
 
 // ==================================================
 // RENDER
 // ==================================================
-function renderStart() {
-  // ✅ NOW this is ACTUAL pending ORDER COUNT
-  setText($('dash-pending'), orders.length);
+function setText(el, v) {
+  if (el) el.textContent = v ?? '';
+}
 
-  // ✅ Total cans/items to pick across pending orders
-  setText(
-    $('dash-cans'),
-    pickQueue.reduce((s, i) => s + (i.qty || 0), 0)
-  );
+function renderStart() {
+  showView('startView');
+
+  // ✅ Orders count (not SKU count)
+  setText(byId('dash-pending'), orders.length);
+
+  // ✅ Total items/cans to pick
+  const total = pickQueue.reduce((s, i) => s + (i.qty || 0), 0);
+  setText(byId('dash-cans'), total);
 }
 
 function renderPick() {
   const it = pickQueue[pickIndex];
-  if (!it) return alert('Done');
 
-  setText($('pickLocation'), it.loc?.label || '');
-  setText($('pickProgress'), `${pickIndex + 1} / ${pickQueue.length}`);
-  setText($('pickName'), it.title);
-  setText($('pickQty'), it.qty);
+  if (!it) {
+    showView('completeView');
+    setText(byId('pickedCount'), pickQueue.length);
+    setText(byId('issueCount'), 0);
+    return;
+  }
+
+  showView('pickView');
+
+  setText(byId('pickLocation'), it.loc?.label || '');
+  setText(byId('pickProgress'), `${pickIndex + 1} / ${pickQueue.length}`);
+  setText(byId('pickName'), it.title);
+
+  // Works if pickQty is ID or .pick-qty class
+  const qtyEl = getEl('pickQty', '.pick-qty');
+  if (qtyEl) qtyEl.textContent = it.qty;
 }
 
 // ==================================================
@@ -194,17 +199,16 @@ function confirmPick() {
 }
 
 // ==================================================
-// HELPERS
-// ==================================================
-function setText(el, v) {
-  if (el) el.textContent = v ?? '';
-}
-
-// ==================================================
 // INIT
 // ==================================================
 window.addEventListener('DOMContentLoaded', () => {
+  // Bind buttons (ID-based, matches your HTML)
+  byId('startPickingBtn')?.addEventListener('click', startPicking);
+  byId('confirmPickBtn')?.addEventListener('click', confirmPick);
+
+  // Default view
+  showView('startView');
+
+  // Load data
   loadOrders();
-  $('startPickingBtn')?.addEventListener('click', startPicking);
-  $('confirmPickBtn')?.addEventListener('click', confirmPick);
 });
