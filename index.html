@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
 
-  <!-- IMPORTANT: file name is style.css -->
   <link rel="stylesheet" href="/Designated-Warehouse/style.css" />
 </head>
 <body>
 
-  <!-- TOP ORDER BAR -->
   <header class="top">
     <div class="topRow">
       <div class="brand">
@@ -49,7 +47,6 @@
     </div>
   </header>
 
-  <!-- MAIN -->
   <main class="wrap">
     <section class="deck">
 
@@ -59,24 +56,25 @@
             <div class="title" id="curTitle">Loading…</div>
             <div class="sub" id="curSub">—</div>
           </div>
-          <div class="qtyBig" id="curQty">—</div>
+
+          <!-- ✅ qty breathes -->
+          <div class="qtyBig breathe" id="curQty">—</div>
         </div>
 
-        <!-- HERO PICK ROW: CAN LEFT, NEXT BUTTON RIGHT -->
         <div class="heroPick">
           <div class="imgWrap heroImg">
             <img id="curImg" alt="Current item image" />
           </div>
 
           <div class="heroSide">
-            <button id="btnPickNext" class="btn heroNext secondary" type="button">
+            <!-- ✅ next button breathes too -->
+            <button id="btnPickNext" class="btn heroNext secondary breathe" type="button">
               Next →
             </button>
             <div class="heroHint">Tap once per item</div>
           </div>
         </div>
 
-        <!-- NEXT (TWO SMALL) -->
         <div class="nextRow">
           <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
             <div class="miniTop">
@@ -99,7 +97,6 @@
           </button>
         </div>
 
-        <!-- BOTTOM ACTIONS -->
         <div class="actions">
           <div class="row2">
             <button id="btnSkip" class="btn big secondary">Skip</button>
@@ -108,7 +105,6 @@
         </div>
       </div>
 
-      <!-- OPTIONAL LIST -->
       <div class="listWrap">
         <div class="listHeader">
           <div class="listTitle">Order list</div>
