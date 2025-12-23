@@ -87,7 +87,6 @@ async function fetchJson(url){
 
 // =========================================================
 // AISLE PATH (PLACEHOLDER)
-// Replace with your real mapping when ready.
 // =========================================================
 function guessAisle(title){
   const t = safe(title).toUpperCase();
@@ -170,7 +169,7 @@ function rowToObj(row, hmap){
     address: safe(get('address')),
     itemTitle: safe(get('itemtitle')),
     variantTitle: safe(get('varianttitle')),
-    qty: toIntQty(get('qty')),
+    qty: parseInt(safe(get('qty')).replace(/[^\d-]/g,''),10) || 0,
     picked: parseBool(get('picked')),
     notes: safe(get('notes')),
     imageUrl: safe(get('imageurl')),
@@ -321,7 +320,7 @@ function setNextCard(item, titleId, qtyId, aisleId, imgId){
     if($(titleId)) $(titleId).textContent = '—';
     return;
   }
-  $(qtyId).textContent = `${item.qty}`;     // REAL QTY
+  $(qtyId).textContent = `${item.qty}`;
   $(aisleId).textContent = item.aisle;
   $(imgId).src = item.imageResolved;
   if($(titleId)) $(titleId).textContent = item.itemTitle;
@@ -445,11 +444,13 @@ function nextOrder(){
 // =========================================================
 async function init(){
   try{
-    $('btnPicked').addEventListener('click', pickCurrent);
     $('btnSkip').addEventListener('click', skipCurrent);
     $('btnUndo').addEventListener('click', undoLast);
     $('btnPrevOrder').addEventListener('click', prevOrder);
     $('btnNextOrder').addEventListener('click', nextOrder);
+
+    // NEW: hero Next button triggers pick+advance
+    $('btnPickNext').addEventListener('click', pickCurrent);
 
     $('next1').addEventListener('click', ()=> jumpNext(1));
     $('next2').addEventListener('click', ()=> jumpNext(2));
