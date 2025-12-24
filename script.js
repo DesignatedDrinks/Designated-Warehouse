@@ -23,22 +23,54 @@ const STORAGE_KEY = 'dw_picked_queue_v1';
 // UTILS
 // =========================================================
 function safe(v){ return (v ?? '').toString().trim(); }
+
 function setError(msg){
   const box = $('errBox');
   if(!box) return;
   box.innerHTML = msg ? `<div class="error">${msg}</div>` : '';
 }
+
 function normalizeText(s){
   return safe(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
 }
+
 function itemKeyByTitle(itemTitle){ return normalizeText(itemTitle); }
+
 function toIntQty(x){
   const n = parseInt(safe(x).replace(/[^\d-]/g,''), 10);
   return Number.isFinite(n) ? n : 0;
 }
+
 function parseBool(x){
   const v = safe(x).toLowerCase();
   return v === 'true' || v === '1' || v === 'yes';
+}
+
+function escapeHtml(str){
+  return (str ?? '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+
+// Stop iOS double-tap zoom / focus behavior on rapid taps
+function killTapWeirdness(e){
+  if(!e) return;
+  try { e.preventDefault(); } catch {}
+  try { e.stopPropagation(); } catch {}
+  const el = e.currentTarget;
+  if(el && el.blur) try { el.blur(); } catch {}
+}
+
+function formatCustomerNameHTML(full){
+  const n = safe(full);
+  if(!n) return '—';
+  const parts = n.split(/\s+/).filter(Boolean);
+  if(parts.length < 2) return escapeHtml(n);
+  const last = parts.pop();
+  return `${escapeHtml(parts.join(' '))} <strong>${escapeHtml(last)}</strong>`;
 }
 
 function firstNameInitial(fullName){
@@ -46,8 +78,9 @@ function firstNameInitial(fullName){
   if(!n) return '—';
   const parts = n.split(/\s+/).filter(Boolean);
   if(parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[parts.length-1][0]}.`;
+  return `${parts[0]} ${parts[parts.length-1]}`; // full last name
 }
+
 function cityProvince(address){
   const a = safe(address);
   if(!a) return '—';
@@ -67,6 +100,7 @@ function placeholderSvg(title){
     </svg>
   `);
 }
+
 function resolveImage(url, title){
   const u = safe(url);
   if(u && u.startsWith('http')) return u;
@@ -252,7 +286,6 @@ function buildOrders(rows){
 
   const out = [];
   for(const o of byOrder.values()){
-    // combine duplicates by itemTitle into TOTAL CANS
     const merged = new Map();
 
     for(const r of o.itemsRaw){
@@ -325,15 +358,6 @@ function totalsForOrder(o){
   return { total, picked };
 }
 
-function escapeHtml(str){
-  return (str ?? '').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#039;");
-}
-
 function setOrderBar(){
   const o = currentOrder();
   const card = $('orderCard');
@@ -345,7 +369,7 @@ function setOrderBar(){
   const { total, picked } = totalsForOrder(o);
   const pct = total ? Math.round((picked/total)*100) : 0;
 
-  $('whoLine').textContent = `${firstNameInitial(o.customerName)} · ${cityProvince(o.address)}`;
+  $('whoLine').innerHTML = `${formatCustomerNameHTML(o.customerName)} · ${escapeHtml(cityProvince(o.address))}`;
   $('addrLine').textContent = safe(o.address) || '—';
   $('chipOrder').textContent = `#${o.orderId}`;
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
@@ -445,7 +469,6 @@ function renderCurrent(){
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curImg').src = './done.svg';
 
-    // ✅ turn pill into DONE NEXT button
     setQtyMode('done');
 
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
@@ -490,6 +513,14 @@ function pickCurrent(){
 
   setPicked(o.orderId, cur.key, true);
   undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
+
+  // Qty pulse feedback
+  const q = $('curQtyNumber');
+  if(q){
+    q.classList.remove('flash');
+    void q.offsetWidth;
+    q.classList.add('flash');
+  }
 
   renderAll();
 }
@@ -548,8 +579,9 @@ function resetThisOrder(){
   const o = currentOrder();
   if(!o) return;
 
+  const { total, picked } = totalsForOrder(o);
   const ok = confirm(
-    `Reset picked progress for Order #${o.orderId}?\n\nThis clears picked status on this device only (does not change the sheet).`
+    `Reset picked progress for Order #${o.orderId}?\n\nCustomer: ${o.customerName}\nPicked: ${picked}/${total}\n\nThis clears picked status on this device only (does not change the sheet).`
   );
   if(!ok) return;
 
@@ -565,7 +597,9 @@ function resetThisOrder(){
 }
 
 // DONE NEXT: red pill click advances order ONLY when done
-function qtyPillClick(){
+function qtyPillClick(e){
+  if(e) killTapWeirdness(e);
+
   const o = currentOrder();
   if(!o) return;
 
@@ -587,12 +621,31 @@ async function init(){
     $('btnNextOrder')?.addEventListener('click', nextOrder);
     $('btnResetOrder')?.addEventListener('click', resetThisOrder);
 
-    $('btnPickNext')?.addEventListener('click', pickCurrent);
+    // Fast tap controls (pointerdown) — prevents iOS zoom/focus weirdness
+    $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      pickCurrent();
+    }, { passive:false });
 
-    $('next1')?.addEventListener('click', ()=> jumpNext(1));
-    $('next2')?.addEventListener('click', ()=> jumpNext(2));
+    $('tapPickArea')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      pickCurrent();
+    }, { passive:false });
 
-    $('curQty')?.addEventListener('click', qtyPillClick);
+    $('next1')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      jumpNext(1);
+    }, { passive:false });
+
+    $('next2')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      jumpNext(2);
+    }, { passive:false });
+
+    $('curQty')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      qtyPillClick(e);
+    }, { passive:false });
 
     const j = await fetchJson(ordersUrl);
     const values = j.values || [];
