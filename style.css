@@ -14,29 +14,6 @@
 
 *{box-sizing:border-box}
 
-/* =========================================
-   Warehouse touch hardening (stop zoom/jank)
-   ========================================= */
-html, body{
-  height:100%;
-  -webkit-text-size-adjust:100%;
-}
-
-*{
-  -webkit-touch-callout:none;
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-button,
-.btn,
-.qtyAction,
-.nextTap,
-#tapPickArea{
-  touch-action: manipulation;
-}
-
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
@@ -79,7 +56,9 @@ body{
   color:#fff;
   cursor:pointer;
   box-shadow:0 10px 20px rgba(91,47,214,.20);
+  -webkit-tap-highlight-color: transparent;
 }
+.btn:active{ transform: translateY(1px); }
 .btn.secondary{
   background:#ede9fe;
   color:#341a8a;
@@ -88,13 +67,6 @@ body{
 .btn.danger{
   background:var(--danger);
   box-shadow:0 10px 20px rgba(239,68,68,.18);
-}
-
-/* Replace translateY press with opacity (less “zoom vibe”) */
-.btn:active,
-.qtyAction:active,
-.nextTap:active{
-  opacity:.92;
 }
 
 /* ORDER CARD */
@@ -113,7 +85,6 @@ body{
   padding:10px 12px;
 }
 .whoLine{ font-weight:1000; font-size:12px; }
-.whoLine strong{ font-weight:1200; }
 .addrLine{ margin-top:1px; color:var(--muted); font-weight:900; font-size:10px; }
 
 .chips{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
@@ -161,7 +132,7 @@ body{
 }
 
 /* LAYOUT */
-.wrap{ padding:10px 16px calc(28px + env(safe-area-inset-bottom)); }
+.wrap{ padding:10px 16px 28px; }
 .deck{ display:grid; gap:12px; }
 
 .card{
@@ -214,22 +185,15 @@ body{
   place-items:center;
   padding:6px 8px;
   cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
 }
+.qtyAction:active{ transform: translateY(1px); }
+
 .qtyNumber{
   font-weight:1200;
   font-size:28px;
   color:#dc2626;
   line-height:1;
-}
-
-/* Quantity pulse feedback */
-.qtyNumber.flash{
-  animation: qtyPulse .12s ease;
-}
-@keyframes qtyPulse{
-  0%{ transform:scale(1); }
-  50%{ transform:scale(.9); }
-  100%{ transform:scale(1); }
 }
 
 .qtyDone{
@@ -274,6 +238,19 @@ body{
   border-radius:14px;
   display:block;
 }
+
+/* ✅ make the can image + container non-interactive */
+.noTap{
+  pointer-events:none;
+  cursor:default;
+  user-select:none;
+}
+.noTap img{
+  pointer-events:none;
+  user-select:none;
+  -webkit-user-drag:none;
+}
+
 .heroSide{
   display:grid;
   grid-template-rows: 1fr auto;
@@ -310,8 +287,7 @@ body{
   box-shadow:var(--shadow);
   cursor:pointer;
 }
-.nextTap{ opacity:.85; }
-.nextTap:active{ opacity:1; }
+.nextTap:active{ transform: translateY(1px); }
 
 .miniTop{
   display:flex;
