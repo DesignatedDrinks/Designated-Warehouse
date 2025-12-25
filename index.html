@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
@@ -66,12 +66,13 @@
         </div>
 
         <div class="heroPick">
-          <!-- BIG TAP AREA: tapping image area picks current -->
-          <div class="imgWrap heroImg" id="tapPickArea">
-            <img id="curImg" alt="Current item image" />
+          <!-- ✅ NON-CLICKABLE CAN IMAGE -->
+          <div class="imgWrap heroImg noTap" aria-hidden="true">
+            <img id="curImg" alt="Current item image" draggable="false" />
           </div>
 
           <div class="heroSide">
+            <!-- ✅ ONLY THIS BUTTON PICKS -->
             <button id="btnPickNext" class="btn heroNext secondary" type="button">Next →</button>
             <div class="heroHint">Tap once per item</div>
           </div>
@@ -84,7 +85,7 @@
               <div class="miniAisle" id="n1Aisle">—</div>
             </div>
             <div class="miniThumb">
-              <img id="n1Img" alt="Next item image 1" />
+              <img id="n1Img" alt="Next item image 1" draggable="false" />
             </div>
           </button>
 
@@ -94,7 +95,7 @@
               <div class="miniAisle" id="n2Aisle">—</div>
             </div>
             <div class="miniThumb">
-              <img id="n2Img" alt="Next item image 2" />
+              <img id="n2Img" alt="Next item image 2" draggable="false" />
             </div>
           </button>
         </div>
