@@ -107,7 +107,6 @@ async function fetchJson(url){
   const res = await fetch(url);
   const text = await res.text();
   if(!res.ok){
-    // Show actual Google error body — this is what you need when it fails.
     throw new Error(`Fetch failed: ${res.status}\n${text}`);
   }
   try { return JSON.parse(text); }
@@ -184,7 +183,6 @@ function parseLocCode(locCode){
   if(m){
     const n = parseInt(m[1],10);
     if(!Number.isFinite(n)) return null;
-    // Aisle A sort: higher number first
     return { zone:'A', idx:n, side:'', sortKey: [1, -n, 0] };
   }
 
@@ -194,17 +192,77 @@ function parseLocCode(locCode){
     const side = m[1];
     const n = parseInt(m[2],10);
     if(!Number.isFinite(n)) return null;
-    // zipper: idx ascending, N before S
-    const sideOrder = (side === 'N') ? 0 : 1;
+    const sideOrder = (side === 'N') ? 0 : 1; // N before S
     return { zone:'B', idx:n, side, sortKey: [2, n, sideOrder] };
   }
 
   return { zone:'?', idx:999, side:'', sortKey: [99, 999, 0] };
 }
-
 function locLabel(locCode){
   const s = safe(locCode);
   return s || '—';
+}
+
+// =========================================================
+// VARIETY PACK EXPANSION (THIS IS THE FIX)
+// You MUST list the component cans by EXACT ImageLookup itemTitle.
+// =========================================================
+const VARIETY_PACKS = [
+  {
+    // Match rule: if the order line's itemTitle includes this text
+    includesMatch: 'dry february - 28 pack',
+    // Optional: used only for your sanity
+    name: 'Dry February - 28 Pack',
+    // Components: each becomes a pickable single can line item
+    // qty is "per pack". If customer buys 2 packs, it doubles.
+    components: [
+      // =============================
+      // REPLACE THESE WITH REAL TITLES
+      // =============================
+      // { title: 'Athletic Brewing Company (Non-Alcoholic) Run Wild IPA', qty: 1 },
+      // { title: 'Atypique (Non-Alcoholic) Gin & Tonic', qty: 1 },
+      // ...
+      // total qty should equal 28
+    ],
+  },
+];
+
+function findVarietyPackRule(itemTitle){
+  const t = normalizeText(itemTitle);
+  for(const rule of VARIETY_PACKS){
+    if(rule.exactMatch && normalizeText(rule.exactMatch) === t) return rule;
+    if(rule.includesMatch && t.includes(normalizeText(rule.includesMatch))) return rule;
+  }
+  return null;
+}
+
+// Takes one order row and returns either [row] or exploded component rows
+function expandVarietyPackRow(r){
+  const rule = findVarietyPackRule(r.itemTitle);
+  if(!rule) return [r];
+
+  const out = [];
+  const packCount = Math.max(1, r.units || 1); // units = number of packs ordered
+
+  for(const c of (rule.components || [])){
+    const perPack = toIntQty(c.qty);
+    const qtyUnits = perPack * packCount;
+    if(qtyUnits <= 0) continue;
+
+    out.push({
+      ...r,
+      itemTitle: c.title,
+      variantTitle: 'Single',
+      units: qtyUnits,
+      packSize: 1,
+      cans: qtyUnits,
+    });
+  }
+
+  // If misconfigured (no components), fall back to original row
+  if(!out.length) return [r];
+
+  return out;
 }
 
 // =========================================================
@@ -271,7 +329,7 @@ function mustHaveHeadersOrders(hmap){
 }
 
 function mustHaveHeadersLookup(hmap){
-  // ImageLookup: itemTitle, imageUrl, locCode (locCode can be blank for some, but header must exist)
+  // ImageLookup: itemTitle, imageUrl, locCode
   const required = ['itemtitle','imageurl','loccode'];
   const missing = required.filter(k => !(k in hmap));
   if(missing.length) throw new Error(`ImageLookup headers missing: ${missing.join(', ')}`);
@@ -296,7 +354,7 @@ function rowToOrderObj(row, hmap){
     cans,
     picked: parseBool(get('picked')),
     notes: safe(get('notes')),
-    imageUrl: safe(get('imageurl')), // may be blank, lookup can override
+    imageUrl: safe(get('imageurl')),
   };
   if(!r.orderId && !r.itemTitle && !r.customerName) return null;
   if(normalizeText(r.itemTitle) === 'itemtitle') return null;
@@ -322,7 +380,7 @@ function buildLookupMap(values){
 }
 
 // =========================================================
-// BUILD ORDERS (JOIN with ImageLookup)
+// BUILD ORDERS (JOIN with ImageLookup + VARIETY EXPANSION)
 // =========================================================
 function buildOrders(rows, lookupMap){
   const byOrder = new Map();
@@ -345,55 +403,53 @@ function buildOrders(rows, lookupMap){
   for(const o of byOrder.values()){
     const merged = new Map();
 
-    for(const r of o.itemsRaw){
-      if(!r.itemTitle) continue;
-      if(r.cans <= 0) continue;
+    for(const r0 of o.itemsRaw){
+      // explode variety packs into component rows
+      const expandedRows = expandVarietyPackRow(r0);
 
-      const k = itemKeyByTitle(r.itemTitle);
-      const lu = lookupMap.get(k);
+      for(const r of expandedRows){
+        if(!r.itemTitle) continue;
+        if(r.cans <= 0) continue;
 
-      if(!merged.has(k)){
-        const loc = lu?.locCode ? parseLocCode(lu.locCode) : null;
+        const k = itemKeyByTitle(r.itemTitle);
+        const lu = lookupMap.get(k);
 
-        // image: lookup wins, else Orders, else placeholder
-        const imgCandidate = lu?.imageUrl || r.imageUrl;
-        const imgResolved = resolveImage(imgCandidate, r.itemTitle);
+        if(!merged.has(k)){
+          const loc = lu?.locCode ? parseLocCode(lu.locCode) : null;
 
-        merged.set(k, {
-          key: k,
-          itemTitle: r.itemTitle,
-          qtyCans: 0,
+          const imgCandidate = lu?.imageUrl || r.imageUrl;
+          const imgResolved = resolveImage(imgCandidate, r.itemTitle);
 
-          // show locCode on screen
-          locCode: lu?.locCode || '',
+          merged.set(k, {
+            key: k,
+            itemTitle: r.itemTitle,
+            qtyCans: 0,
 
-          // sorting
-          locSort: loc?.sortKey || [99,999,0],
+            locCode: lu?.locCode || '',
+            locSort: loc?.sortKey || [99,999,0],
 
-          imageResolved: imgResolved,
-          sources: []
-        });
+            imageResolved: imgResolved,
+            sources: []
+          });
+        }
+
+        const item = merged.get(k);
+
+        const candidate = (lookupMap.get(k)?.imageUrl || r.imageUrl || '');
+        if(item.imageResolved.startsWith('data:image') && safe(candidate).startsWith('http')){
+          item.imageResolved = candidate;
+        }
+
+        item.qtyCans += r.cans;
+        item.sources.push({ units: r.units, packSize: r.packSize, cans: r.cans });
       }
-
-      const item = merged.get(k);
-
-      // If item currently placeholder but we now have a real url, swap in
-      const candidate = (lookupMap.get(k)?.imageUrl || r.imageUrl || '');
-      if(item.imageResolved.startsWith('data:image') && safe(candidate).startsWith('http')){
-        item.imageResolved = candidate;
-      }
-
-      item.qtyCans += r.cans;
-      item.sources.push({ units: r.units, packSize: r.packSize, cans: r.cans });
     }
 
     const items = Array.from(merged.values()).sort((a,b)=>{
-      // brand priority first (your existing rule)
       const pa = brandPriority(a.itemTitle);
       const pb = brandPriority(b.itemTitle);
       if(pa !== pb) return pa - pb;
 
-      // then warehouse path by locCode sortKey
       const as = a.locSort, bs = b.locSort;
       for(let i=0;i<Math.max(as.length, bs.length);i++){
         const av = as[i] ?? 0;
@@ -401,7 +457,6 @@ function buildOrders(rows, lookupMap){
         if(av !== bv) return av - bv;
       }
 
-      // tie-breaker: title
       return a.itemTitle.localeCompare(b.itemTitle);
     });
 
@@ -596,7 +651,6 @@ function pickCurrent(){
   setPicked(o.orderId, cur.key, true);
   undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
 
-  // Qty pulse feedback
   const q = $('curQtyNumber');
   if(q){
     q.classList.remove('flash');
@@ -656,7 +710,6 @@ function nextOrder(){
   }
 }
 
-// RESET CURRENT ORDER (local-only)
 function resetThisOrder(){
   const o = currentOrder();
   if(!o) return;
@@ -678,7 +731,6 @@ function resetThisOrder(){
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
 }
 
-// DONE NEXT: red pill click advances order ONLY when done
 function qtyPillClick(e){
   if(e) killTapWeirdness(e);
 
@@ -687,7 +739,7 @@ function qtyPillClick(e){
 
   rebuildQueue();
   const done = (queue.length === 0);
-  if(!done) return; // ignore during picking
+  if(!done) return;
 
   nextOrder();
 }
@@ -703,7 +755,6 @@ async function init(){
     $('btnNextOrder')?.addEventListener('click', nextOrder);
     $('btnResetOrder')?.addEventListener('click', resetThisOrder);
 
-    // Fast tap controls (pointerdown) — prevents iOS zoom/focus weirdness
     $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
       killTapWeirdness(e);
       pickCurrent();
@@ -729,7 +780,6 @@ async function init(){
       qtyPillClick(e);
     }, { passive:false });
 
-    // 1) Fetch both sheets
     const [ordersJson, lookupJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
@@ -741,16 +791,13 @@ async function init(){
     const lookupValues = lookupJson.values || [];
     if(lookupValues.length < 2) throw new Error('ImageLookup sheet has no data.');
 
-    // 2) Parse ImageLookup into a map
     const lookupMap = buildLookupMap(lookupValues);
 
-    // 3) Parse Orders rows
     const hmap = buildHeaderMap(ordersValues[0]);
     mustHaveHeadersOrders(hmap);
 
     const rows = ordersValues.slice(1).map(r => rowToOrderObj(r, hmap)).filter(Boolean);
 
-    // 4) Build orders with lookup join
     orders = buildOrders(rows, lookupMap);
 
     if(!orders.length){
