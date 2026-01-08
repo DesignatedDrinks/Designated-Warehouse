@@ -1,15 +1,16 @@
+// script.js
 // =========================================================
 // CONFIG
 // =========================================================
-const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g'; // ✅ Designated Warehouse file
+const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const ordersSheetName = 'Orders';
-const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly (Designated Warehouse file)
+const lookupSheetName = 'ImageLookup';
 
-const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us'; // ✅ Variety Packs file
-const varietySheetName = 'Variety Packs'; // MUST match tab name exactly (Variety Packs file)
+const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
+const varietySheetName = 'Variety Packs';
 
 const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
-  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
+  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7');
 
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
@@ -31,13 +32,22 @@ let queueIndex = 0;
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v1';
 
-// ✅ Built at runtime from Variety Packs sheet
-let VARIETY_PACK_MAP = new Map(); // key(normalized pack title) => { packTitle, components:[{title, qty}] }
+let VARIETY_PACK_MAP = new Map();
+
+// ✅ tap lock (prevents double pick from rapid/ghost taps)
+let PICK_LOCKED = false;
+let LAST_PICK_TS = 0;
+const PICK_LOCK_MS = 350;
 
 // =========================================================
 // UTILS
 // =========================================================
 function safe(v){ return (v ?? '').toString().trim(); }
+
+function canLabel(n){
+  const x = Math.abs(parseInt(n, 10) || 0);
+  return x === 1 ? 'can' : 'cans';
+}
 
 function setError(msg){
   const box = $('errBox');
@@ -68,21 +78,6 @@ function escapeHtml(str){
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'","&#039;");
-}
-
-// ✅ singular/plural label for "can/cans"
-function canLabel(n){
-  const x = Number(n);
-  return (Number.isFinite(x) && x === 1) ? 'can' : 'cans';
-}
-
-// Stop iOS double-tap zoom / focus behavior on rapid taps
-function killTapWeirdness(e){
-  if(!e) return;
-  try { e.preventDefault(); } catch {}
-  try { e.stopPropagation(); } catch {}
-  const el = e.currentTarget;
-  if(el && el.blur) try { el.blur(); } catch {}
 }
 
 function formatCustomerNameHTML(full){
@@ -131,7 +126,7 @@ async function fetchJson(url){
 }
 
 // =========================================================
-// PACK SIZE PARSING (packs -> cans)
+// PACK SIZE PARSING
 // =========================================================
 function parsePackSize(itemTitle, variantTitle){
   const s = `${safe(itemTitle)} ${safe(variantTitle)}`.toLowerCase();
@@ -170,9 +165,7 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// LOCATION (locCode) SORTING
-// 1) Aisle B zipper FIRST: B-N-01, B-S-01, B-N-02, B-S-02 ...
-// 2) Aisle A SECOND: A-11 → A-01 (descending)
+// LOCATION SORTING
 // =========================================================
 function parseLocCode(locCode){
   const s = safe(locCode).toUpperCase();
@@ -202,7 +195,7 @@ function locLabel(locCode){
 }
 
 // =========================================================
-// PARSE SHEET HELPERS (TOLERANT)
+// PARSE SHEET HELPERS
 // =========================================================
 function buildHeaderMap(headerRow){
   const map = {};
@@ -225,31 +218,20 @@ function mustHaveHeadersOrders(hmap){
 }
 
 // =========================================================
-// VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
-// - Reads QtyPerPackItem
-// - Robust title matching (handles "- 28 Pack" suffixes, etc.)
+// VARIETY PACK EXPANSION
 // =========================================================
 function stripVendorPrefix(title){
   const t = safe(title);
-  const m = t.match(/^\s*.*?\)\s*(.+)$/); // everything after first ")"
+  const m = t.match(/^\s*.*?\)\s*(.+)$/);
   return m ? safe(m[1]) : t;
 }
 
 function normalizePackTitle(title){
   let t = safe(title);
-
-  // remove vendor prefix
   t = stripVendorPrefix(t);
-
-  // normalize dash characters
   t = t.replace(/[–—]/g, '-');
-
-  // If it ends like "... - 28 Pack - 28 Pack", collapse to "... - 28 Pack"
   t = t.replace(/(\b\d+\s*pack\b)\s*-\s*\1\b\s*$/i, '$1');
-
-  // If it ends like "... Super 31 Pack - 31 Pack", remove the trailing "- 31 Pack"
   t = t.replace(/\s*-\s*\d+\s*pack\b\s*$/i, '');
-
   return normalizeText(t);
 }
 
@@ -258,7 +240,6 @@ function buildVarietyPackMap(values){
   if(!values || values.length < 2) return out;
 
   const hmap = buildHeaderMap(values[0]);
-
   const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
   const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
   const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
@@ -281,10 +262,8 @@ function buildVarietyPackMap(values){
 
     const keyPack = normalizePackTitle(packTitleRaw);
     const record = out.get(keyPack) || { packTitle: packTitleRaw, components: [] };
-
     record.packTitle = record.packTitle || packTitleRaw;
     record.components.push({ title: beerTitle, qty });
-
     out.set(keyPack, record);
   }
 
@@ -300,11 +279,11 @@ function expandVarietyPackRow(r){
   if(!rule) return [r];
 
   const out = [];
-  const packCount = Math.max(1, r.units || 1); // number of packs ordered
+  const packCount = Math.max(1, r.units || 1);
 
   for(const c of (rule.components || [])){
     const perPack = Math.max(1, toIntQty(c.qty));
-    const qtyUnits = perPack * packCount; // ✅ multiplier logic (QtyPerPackItem × #packs)
+    const qtyUnits = perPack * packCount;
     if(qtyUnits <= 0) continue;
 
     out.push({
@@ -363,7 +342,6 @@ function buildLookupMap(values){
   if(!values || values.length < 2) return new Map();
 
   const hmap = buildHeaderMap(values[0]);
-
   const idxTitle = pickHeader(hmap, ['itemtitle','item title','title','product']);
   const idxImg   = pickHeader(hmap, ['imageurl','image url','img','beer image url']);
   const idxLoc   = pickHeader(hmap, ['loccode','loc code','location','bin','aisle']);
@@ -387,7 +365,7 @@ function buildLookupMap(values){
 }
 
 // =========================================================
-// PICKED STATE (LOCAL ONLY)
+// PICKED STATE (LOCAL)
 // =========================================================
 function loadPicked(){
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
@@ -434,8 +412,7 @@ function boxLabel(totalCans){
 }
 
 // =========================================================
-// BUILD ORDERS (JOIN with ImageLookup + VARIETY EXPANSION)
-// SORT = LOCATION ONLY (B zipper first, then A descending)
+// BUILD ORDERS
 // =========================================================
 function buildOrders(rows, lookupMap){
   const byOrder = new Map();
@@ -478,10 +455,8 @@ function buildOrders(rows, lookupMap){
             key: k,
             itemTitle: r.itemTitle,
             qtyCans: 0,
-
             locCode: lu?.locCode || '',
             locSort: loc?.sortKey || [99,999,0],
-
             imageResolved: imgResolved,
             sources: []
           });
@@ -558,9 +533,16 @@ function setOrderBar(){
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
+  // ✅ BIG totals
+  $('bigPicked').textContent = `${picked}`;
+  $('bigPickedUnit').textContent = canLabel(picked);
+  $('bigTotal').textContent = `${total}`;
+  $('bigTotalUnit').textContent = canLabel(total);
+
+  // ✅ also update small progress line (now bigger in CSS)
   $('progressFill').style.width = `${pct}%`;
-  $('progressLeft').textContent = `${picked} picked`;
-  $('progressRight').textContent = `${total} total`;
+  $('progressLeft').textContent = `${picked} ${canLabel(picked)} picked`;
+  $('progressRight').textContent = `${total} ${canLabel(total)} total`;
 }
 
 function renderList(){
@@ -585,6 +567,7 @@ function renderList(){
     `;
   }).join('');
 
+  // ✅ list click does NOT pick. It only jumps.
   body.querySelectorAll('.listRow').forEach(row=>{
     row.addEventListener('click', ()=>{
       const k = row.getAttribute('data-key');
@@ -609,37 +592,33 @@ function setNextCard(item, qtyId, aisleId, imgId){
   im.src = item.imageResolved;
 }
 
-// ✅ UPDATED: sets unit label to "can/cans"
 function setQtyMode(mode, numberText){
   const num = $('curQtyNumber');
+  const unit = $('curQtyUnit');
   const done = $('curQtyDone');
-  const unit = document.querySelector('.qtyUnit');
-  if(!num || !done) return;
+  if(!num || !done || !unit) return;
 
   if(mode === 'done'){
     num.style.display = 'none';
-    if(unit) unit.style.display = 'none';
+    unit.style.display = 'none';
     done.style.display = 'grid';
   }else{
     done.style.display = 'none';
     num.style.display = 'block';
-    if(unit) unit.style.display = 'block';
-
-    const qty = Number(numberText);
+    unit.style.display = 'block';
     num.textContent = numberText ?? '—';
 
-    if(unit){
-      unit.textContent = canLabel(qty);
-    }
+    const n = parseInt(numberText, 10);
+    unit.textContent = canLabel(n);
   }
 }
 
 function renderCurrent(){
   const o = currentOrder();
-  const nextPickBtn = $('btnPickNext');
+  const pickBtn = $('btnPickNext');
 
   if(!o){
-    if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
+    if(pickBtn) pickBtn.style.visibility = 'visible';
     $('curTitle').textContent = 'No orders found';
     $('curSub').textContent = '';
     setQtyMode('qty', '—');
@@ -656,20 +635,19 @@ function renderCurrent(){
   const cur = queue[queueIndex];
 
   if(!cur){
-    if(nextPickBtn) nextPickBtn.style.visibility = 'hidden';
+    if(pickBtn) pickBtn.style.visibility = 'hidden';
 
     $('curTitle').textContent = 'ORDER PICKED';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curImg').src = './done.svg';
 
     setQtyMode('done');
-
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
     return;
   }
 
-  if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
+  if(pickBtn) pickBtn.style.visibility = 'visible';
 
   $('curTitle').textContent = cur.itemTitle;
 
@@ -681,7 +659,6 @@ function renderCurrent(){
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
-
   $('curImg').src = cur.imageResolved;
 
   setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
@@ -694,7 +671,7 @@ function renderAll(){
 }
 
 // =========================================================
-// ACTIONS
+// ACTIONS (ONLY Pick button advances)
 // =========================================================
 function pickCurrent(){
   const o = currentOrder();
@@ -709,14 +686,28 @@ function pickCurrent(){
   setPicked(o.orderId, cur.key, true);
   undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
 
-  const q = $('curQtyNumber');
-  if(q){
-    q.classList.remove('flash');
-    void q.offsetWidth;
-    q.classList.add('flash');
-  }
-
   renderAll();
+}
+
+// ✅ tap-safe wrapper: prevents double picks from ghost taps / rapid taps
+function guardedPick(){
+  const now = Date.now();
+  if(PICK_LOCKED) return;
+  if(now - LAST_PICK_TS < PICK_LOCK_MS) return;
+
+  PICK_LOCKED = true;
+  LAST_PICK_TS = now;
+
+  const btn = $('btnPickNext');
+  if(btn) btn.disabled = true;
+
+  try{ pickCurrent(); }
+  finally{
+    setTimeout(()=>{
+      PICK_LOCKED = false;
+      if(btn) btn.disabled = false;
+    }, PICK_LOCK_MS);
+  }
 }
 
 function skipCurrent(){
@@ -740,15 +731,6 @@ function undoLast(){
   }
 
   renderAll();
-}
-
-function jumpNext(offset){
-  rebuildQueue();
-  const target = queueIndex + offset;
-  if(target >= 0 && target <= queue.length - 1){
-    queueIndex = target;
-    renderAll();
-  }
 }
 
 function prevOrder(){
@@ -789,19 +771,6 @@ function resetThisOrder(){
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
 }
 
-function qtyPillClick(e){
-  if(e) killTapWeirdness(e);
-
-  const o = currentOrder();
-  if(!o) return;
-
-  rebuildQueue();
-  const done = (queue.length === 0);
-  if(!done) return;
-
-  nextOrder();
-}
-
 // =========================================================
 // INIT
 // =========================================================
@@ -813,32 +782,10 @@ async function init(){
     $('btnNextOrder')?.addEventListener('click', nextOrder);
     $('btnResetOrder')?.addEventListener('click', resetThisOrder);
 
-    $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      pickCurrent();
-    }, { passive:false });
+    // ✅ ONLY PICK BUTTON advances (no other tap advances anything)
+    $('btnPickNext')?.addEventListener('click', guardedPick);
 
-    $('tapPickArea')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      pickCurrent();
-    }, { passive:false });
-
-    $('next1')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      jumpNext(1);
-    }, { passive:false });
-
-    $('next2')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      jumpNext(2);
-    }, { passive:false });
-
-    $('curQty')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      qtyPillClick(e);
-    }, { passive:false });
-
-    // ✅ Load all 3 sheets (Warehouse Orders + Warehouse ImageLookup + Variety Packs)
+    // ✅ Load all 3 sheets
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
@@ -849,9 +796,7 @@ async function init(){
     if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
 
     const lookupValues = lookupJson.values || [];
-    if(lookupValues.length < 2) {
-      console.warn('ImageLookup sheet has no data (continuing).');
-    }
+    if(lookupValues.length < 2) console.warn('ImageLookup sheet has no data (continuing).');
 
     const varietyValues = varietyJson.values || [];
     if(varietyValues.length >= 2){
@@ -868,7 +813,6 @@ async function init(){
     mustHaveHeadersOrders(hmap);
 
     const rows = ordersValues.slice(1).map(r => rowToOrderObj(r, hmap)).filter(Boolean);
-
     orders = buildOrders(rows, lookupMap);
 
     if(!orders.length){
