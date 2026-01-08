@@ -14,11 +14,31 @@
 
 *{box-sizing:border-box}
 
+html, body{
+  height:100%;
+}
+
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   background:var(--bg);
   color:var(--ink);
+}
+
+/* =========================================================
+   MOBILE / TABLET TAP SAFETY (reduces double-tap chaos)
+   ========================================================= */
+button, .btn, .nextTap, .qtyAction, .listRow{
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-touch-callout:none;
+}
+img{
+  user-select:none;
+  -webkit-user-select:none;
+  -webkit-user-drag:none;
 }
 
 /* TOP */
@@ -56,7 +76,6 @@ body{
   color:#fff;
   cursor:pointer;
   box-shadow:0 10px 20px rgba(91,47,214,.20);
-  -webkit-tap-highlight-color: transparent;
 }
 .btn:active{ transform: translateY(1px); }
 .btn.secondary{
@@ -67,6 +86,14 @@ body{
 .btn.danger{
   background:var(--danger);
   box-shadow:0 10px 20px rgba(239,68,68,.18);
+}
+
+/* Optional: visual feedback when an action is temporarily locked by JS */
+.btn.locked,
+.qtyAction.locked,
+.nextTap.locked{
+  opacity:.65;
+  pointer-events:none;
 }
 
 /* ORDER CARD */
@@ -185,7 +212,6 @@ body{
   place-items:center;
   padding:6px 8px;
   cursor:pointer;
-  -webkit-tap-highlight-color: transparent;
 }
 .qtyAction:active{ transform: translateY(1px); }
 
@@ -239,18 +265,16 @@ body{
   display:block;
 }
 
-/* ✅ make the can image + container non-interactive */
+/* make can image + container non-interactive */
 .noTap{
   pointer-events:none;
   cursor:default;
-  user-select:none;
 }
 .noTap img{
   pointer-events:none;
-  user-select:none;
-  -webkit-user-drag:none;
 }
 
+/* Right side */
 .heroSide{
   display:grid;
   grid-template-rows: 1fr auto;
@@ -297,7 +321,7 @@ body{
   gap:8px;
 }
 
-/* ✅ mini qty now RED */
+/* mini qty RED */
 .miniQty{
   font-weight:1200;
   font-size:13px;
