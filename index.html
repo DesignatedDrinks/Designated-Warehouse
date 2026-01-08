@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -28,31 +27,17 @@
 
         <div class="chips">
           <div class="chip" id="chipOrder">#—</div>
+          <div class="chip chipTotal" id="chipTotalCans">Total: —</div>
           <div class="chip" id="chipBoxes">Boxes: —</div>
           <div class="chip" id="chipProgress">0%</div>
         </div>
       </div>
 
-      <!-- ✅ BIG TOTALS (VERY VISIBLE) -->
-      <div class="totalsBig">
-        <div class="tBlock">
-          <div class="tLabel">PICKED</div>
-          <div class="tValue" id="bigPicked">0</div>
-          <div class="tUnit" id="bigPickedUnit">cans</div>
-        </div>
-        <div class="tDivider"></div>
-        <div class="tBlock">
-          <div class="tLabel">TOTAL</div>
-          <div class="tValue" id="bigTotal">0</div>
-          <div class="tUnit" id="bigTotalUnit">cans</div>
-        </div>
-      </div>
-
+      <!-- Keep the bar, remove picked counter -->
       <div class="progressWrap">
         <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
-        <div class="progressMeta">
-          <div id="progressLeft">0 picked</div>
-          <div id="progressRight">0 total</div>
+        <div class="progressMeta single">
+          <div id="progressRight">Total: —</div>
         </div>
       </div>
 
@@ -70,34 +55,33 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- ✅ Current item qty (big + clear) -->
-          <div class="qtyBig qtyAction" id="curQty" aria-label="Current item quantity">
+          <!-- Quantity pill (NOT a pick button). When order is DONE it becomes NEXT. -->
+          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
             <div class="qtyNumber" id="curQtyNumber">—</div>
-            <div class="qtyUnit" id="curQtyUnit">cans</div>
 
             <div class="qtyDone" id="curQtyDone" style="display:none;">
               <div class="qtyCheck">✔</div>
               <div class="qtyNext">NEXT</div>
             </div>
-          </div>
+          </button>
         </div>
 
         <div class="heroPick">
-          <!-- ✅ NON-CLICKABLE CAN IMAGE -->
+          <!-- NON-CLICKABLE CAN IMAGE -->
           <div class="imgWrap heroImg noTap" aria-hidden="true">
             <img id="curImg" alt="Current item image" draggable="false" />
           </div>
 
           <div class="heroSide">
-            <!-- ✅ ONLY THIS BUTTON PICKS -->
-            <button id="btnPickNext" class="btn heroNext secondary" type="button">Pick →</button>
-            <div class="heroHint">Only this button advances</div>
+            <!-- ONLY THIS BUTTON PICKS -->
+            <button id="btnPickNext" class="btn heroNext pickBtn" type="button">PICK →</button>
+            <div class="heroHint">Only this button picks (prevents mis-taps)</div>
           </div>
         </div>
 
-        <!-- ✅ Bottom “next cans” are now NON-INTERACTIVE -->
-        <div class="nextRow noTapAll" aria-hidden="true">
-          <div class="card nextTap" id="next1">
+        <!-- Bottom preview cards: NO TAP, NO BUTTONS -->
+        <div class="nextRow noTap">
+          <div class="card nextCard" aria-hidden="true">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n1Qty">—</div>
               <div class="miniAisle" id="n1Aisle">—</div>
@@ -107,7 +91,7 @@
             </div>
           </div>
 
-          <div class="card nextTap" id="next2">
+          <div class="card nextCard" aria-hidden="true">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n2Qty">—</div>
               <div class="miniAisle" id="n2Aisle">—</div>
@@ -129,7 +113,7 @@
       <div class="listWrap">
         <div class="listHeader">
           <div class="listTitle">Order list</div>
-          <div class="listHint">Tap a row to jump (optional)</div>
+          <div class="listHint">List is view-only (prevents mis-taps)</div>
         </div>
 
         <div id="listBody" class="listBody"></div>
