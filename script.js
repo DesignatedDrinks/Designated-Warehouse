@@ -114,7 +114,7 @@ async function fetchJson(url){
 }
 
 // =========================================================
-// BRAND PRIORITY: Harmon first, Temple/Templ last
+// BRAND PRIORITY: Harmon's first, Temple/Templ last
 // =========================================================
 function isHarmons(title){
   const t = (title || '').toLowerCase();
@@ -170,15 +170,67 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// AISLE PATH (placeholder)
+// LOCATION SORTING — YOUR ACTUAL WAREHOUSE LOGIC
+// Aisle A: single side, pick A-11 -> A-01 (DESC)
+// Aisle B: zipper: B-N-01, B-S-01, B-N-02, B-S-02 ...
 // =========================================================
-function guessAisle(title){
-  const t = safe(title).toUpperCase();
-  const ch = (t.match(/[A-Z]/) || ['?'])[0];
-  if(ch >= 'A' && ch <= 'H') return { aisle:'Aisle 1', sort:1 };
-  if(ch >= 'I' && ch <= 'Q') return { aisle:'Aisle 2', sort:2 };
-  if(ch >= 'R' && ch <= 'Z') return { aisle:'Aisle 3', sort:3 };
-  return { aisle:'Aisle ?', sort:99 };
+function parseLocCode(locCode = "") {
+  const clean = safe(locCode).toUpperCase();
+  const parts = clean.split("-").map(p => p.trim()).filter(Boolean);
+
+  // A-01
+  if(parts.length === 2){
+    const [aisle, bayStr] = parts;
+    const bay = Number(bayStr);
+    return {
+      raw: clean,
+      aisle,
+      side: null,
+      bay: Number.isFinite(bay) ? bay : 999
+    };
+  }
+
+  // B-N-01
+  if(parts.length === 3){
+    const [aisle, side, bayStr] = parts;
+    const bay = Number(bayStr);
+    return {
+      raw: clean,
+      aisle,
+      side,
+      bay: Number.isFinite(bay) ? bay : 999
+    };
+  }
+
+  return { raw: clean, aisle: "Z", side: "Z", bay: 999 };
+}
+
+function locSortKey(locCode){
+  const { aisle, side, bay } = parseLocCode(locCode);
+
+  // Aisle A: A-11 -> A-01 (DESC)
+  if(aisle === "A"){
+    const MAX_A_BAY = 11; // <-- change ONLY if aisle A bays change
+    return (bay >= 0 && bay <= MAX_A_BAY) ? (MAX_A_BAY - bay) : 999;
+  }
+
+  // Aisle B zipper: N then S per bay
+  if(aisle === "B"){
+    const sideRank =
+      side === "N" ? 1 :
+      side === "S" ? 2 :
+      9;
+    return 1000 + (bay * 10) + sideRank;
+  }
+
+  // Unknown aisles go last
+  return 9000 + bay;
+}
+
+function displayLocation(locCode){
+  // what you show in UI under the title
+  const lc = safe(locCode).toUpperCase();
+  return lc ? `Loc: ${lc}` : `Loc: —`;
 }
 
 // =========================================================
@@ -236,13 +288,19 @@ function buildHeaderMap(headerRow){
   headerRow.forEach((h, idx)=> map[normalizeText(h)] = idx);
   return map;
 }
+
 function mustHaveHeaders(hmap){
-  const required = ['orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'];
+  // ADDED: locCode
+  const required = [
+    'orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl','loccode'
+  ];
   const missing = required.filter(k => !(k in hmap));
   if(missing.length) throw new Error(`Sheet headers missing: ${missing.join(', ')}`);
 }
+
 function rowToObj(row, hmap){
   const get = key => row[hmap[key]] ?? '';
+
   const itemTitle = safe(get('itemtitle'));
   const variantTitle = safe(get('varianttitle'));
   const units = toIntQty(get('qty'));
@@ -261,7 +319,9 @@ function rowToObj(row, hmap){
     picked: parseBool(get('picked')),
     notes: safe(get('notes')),
     imageUrl: safe(get('imageurl')),
+    locCode: safe(get('loccode')), // <-- NEW
   };
+
   if(!r.orderId && !r.itemTitle && !r.customerName) return null;
   if(normalizeText(r.itemTitle) === 'itemtitle') return null;
   return r;
@@ -295,13 +355,12 @@ function buildOrders(rows){
       const k = itemKeyByTitle(r.itemTitle);
 
       if(!merged.has(k)){
-        const aisle = guessAisle(r.itemTitle);
         merged.set(k, {
           key: k,
           itemTitle: r.itemTitle,
           qtyCans: 0,
-          aisle: aisle.aisle,
-          aisleSort: aisle.sort,
+          locCode: safe(r.locCode),          // <-- NEW
+          locSort: locSortKey(r.locCode),    // <-- NEW
           imageResolved: resolveImage(r.imageUrl, r.itemTitle),
           sources: []
         });
@@ -309,8 +368,15 @@ function buildOrders(rows){
 
       const item = merged.get(k);
 
+      // If first image was placeholder but later row has a real url, adopt it
       if(item.imageResolved.startsWith('data:image') && r.imageUrl && r.imageUrl.startsWith('http')){
         item.imageResolved = r.imageUrl;
+      }
+
+      // If locCode is blank on first row but exists on a later row, take it
+      if(!safe(item.locCode) && safe(r.locCode)){
+        item.locCode = safe(r.locCode);
+        item.locSort = locSortKey(item.locCode);
       }
 
       item.qtyCans += r.cans;
@@ -318,11 +384,15 @@ function buildOrders(rows){
     }
 
     const items = Array.from(merged.values()).sort((a,b)=>{
+      // 1) Brand priority
       const pa = brandPriority(a.itemTitle);
       const pb = brandPriority(b.itemTitle);
       if(pa !== pb) return pa - pb;
 
-      if(a.aisleSort !== b.aisleSort) return a.aisleSort - b.aisleSort;
+      // 2) Your warehouse path (A then B zipper etc.)
+      if(a.locSort !== b.locSort) return a.locSort - b.locSort;
+
+      // 3) Stable tie-break
       return a.itemTitle.localeCompare(b.itemTitle);
     });
 
@@ -394,7 +464,7 @@ function renderList(){
       <div class="listRow ${done ? 'done' : ''}" data-key="${it.key}">
         <div>
           <div class="lTitle">${escapeHtml(it.itemTitle)}</div>
-          <div class="lSub">${escapeHtml(it.aisle)}${src}</div>
+          <div class="lSub">${escapeHtml(displayLocation(it.locCode))}${src}</div>
         </div>
         <div class="lQty">${it.qtyCans}</div>
       </div>
@@ -421,7 +491,7 @@ function setNextCard(item, qtyId, aisleId, imgId){
     return;
   }
   q.textContent = `${item.qtyCans}`;
-  a.textContent = item.aisle;
+  a.textContent = safe(item.locCode).toUpperCase() || '—'; // show actual locCode
   im.src = item.imageResolved;
 }
 
@@ -482,7 +552,7 @@ function renderCurrent(){
 
   const srcText = cur.sources?.length ? formatSourceBreakdown(cur.sources) : '';
   $('curSub').innerHTML =
-    `<span class="badge">${escapeHtml(cur.aisle)}</span>` +
+    `<span class="badge">${escapeHtml(safe(cur.locCode).toUpperCase() || 'LOC—')}</span>` +
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
@@ -658,7 +728,7 @@ async function init(){
     orders = buildOrders(rows);
 
     if(!orders.length){
-      setError('No valid orders built. Check orderid + itemTitle + qty columns.');
+      setError('No valid orders built. Check orderid + itemTitle + qty + locCode columns.');
     }
 
     renderAll();
