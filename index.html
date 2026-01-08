@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport"
-        content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
-
 <body>
+
   <header class="top">
     <div class="topRow">
       <div class="brand">Designated <span>Warehouse</span></div>
@@ -26,22 +25,15 @@
           <div id="addrLine" class="addrLine">—</div>
         </div>
 
-        <div class="totalCansWrap">
-          <div class="totalCansLabel">TOTAL CANS</div>
-          <div class="totalCansValue" id="totalCans">—</div>
+        <div class="chips">
+          <div class="chip" id="chipOrder">#—</div>
+          <div class="chip" id="chipBoxes">Boxes: —</div>
+          <div class="chip" id="chipProgress">0%</div>
         </div>
-      </div>
-
-      <div class="chips">
-        <div class="chip" id="chipOrder">#—</div>
-        <div class="chip" id="chipBoxes">Boxes: —</div>
-        <div class="chip mutedChip" id="chipProgress">0%</div>
       </div>
 
       <div class="progressWrap">
-        <div class="progressBar">
-          <div id="progressFill" class="progressFill"></div>
-        </div>
+        <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
         <div class="progressMeta">
           <div id="progressLeft">0 picked</div>
           <div id="progressRight">0 total</div>
@@ -62,9 +54,12 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <button class="qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
+          <!-- Main qty / DONE Next button -->
+          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
             <div class="qtyNumber" id="curQtyNumber">—</div>
-            <div class="qtyUnit">CANS</div>
+
+            <!-- ✅ ADDED: unit label (script.js sets can/cans) -->
+            <div class="qtyUnit">cans</div>
 
             <div class="qtyDone" id="curQtyDone" style="display:none;">
               <div class="qtyCheck">✔</div>
@@ -74,22 +69,20 @@
         </div>
 
         <div class="heroPick">
-          <div class="imgWrap noTap" aria-hidden="true">
+          <!-- ✅ NON-CLICKABLE CAN IMAGE -->
+          <div class="imgWrap heroImg noTap" aria-hidden="true">
             <img id="curImg" alt="Current item image" draggable="false" />
           </div>
 
           <div class="heroSide">
-            <!-- ✅ ONLY PICK BUTTON -->
-            <button id="btnPickNext" class="btn heroNext secondary" type="button">
-              PICK ITEM →
-            </button>
-            <div class="heroHint">Only tap the PICK button</div>
+            <!-- ✅ ONLY THIS BUTTON PICKS -->
+            <button id="btnPickNext" class="btn heroNext secondary" type="button">Next →</button>
+            <div class="heroHint">Tap once per item</div>
           </div>
         </div>
 
-        <!-- ✅ PREVIEW ONLY (NOT TAPPABLE) -->
-        <div class="nextRow noTap" aria-hidden="true">
-          <div class="card nextTap previewOnly" id="next1">
+        <div class="nextRow">
+          <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n1Qty">—</div>
               <div class="miniAisle" id="n1Aisle">—</div>
@@ -97,9 +90,9 @@
             <div class="miniThumb">
               <img id="n1Img" alt="Next item image 1" draggable="false" />
             </div>
-          </div>
+          </button>
 
-          <div class="card nextTap previewOnly" id="next2">
+          <button class="card nextTap" id="next2" type="button" aria-label="Next item 2">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n2Qty">—</div>
               <div class="miniAisle" id="n2Aisle">—</div>
@@ -107,7 +100,7 @@
             <div class="miniThumb">
               <img id="n2Img" alt="Next item image 2" draggable="false" />
             </div>
-          </div>
+          </button>
         </div>
 
         <div class="actions">
@@ -121,7 +114,7 @@
       <div class="listWrap">
         <div class="listHeader">
           <div class="listTitle">Order list</div>
-          <div class="listHint">Tap a row to jump</div>
+          <div class="listHint">Tap a row to jump (optional)</div>
         </div>
 
         <div id="listBody" class="listBody"></div>
