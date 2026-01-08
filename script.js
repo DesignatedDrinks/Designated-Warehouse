@@ -1,15 +1,15 @@
 // =========================================================
 // CONFIG
 // =========================================================
-const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g'; // ✅ Designated Warehouse file
+const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const ordersSheetName = 'Orders';
-const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly (Designated Warehouse file)
+const lookupSheetName = 'ImageLookup';
 
-const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us'; // ✅ Variety Packs file
-const varietySheetName = 'Variety Packs'; // MUST match tab name exactly (Variety Packs file)
+const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
+const varietySheetName = 'Variety Packs';
 
 const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
-  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
+  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7');
 
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
@@ -31,12 +31,51 @@ let queueIndex = 0;
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v1';
 
-// ✅ Built at runtime from Variety Packs sheet
-let VARIETY_PACK_MAP = new Map(); // key(normalized pack title) => { packTitle, components:[{title, qty}] }
+// Built at runtime from Variety Packs sheet
+let VARIETY_PACK_MAP = new Map();
 
 // =========================================================
-// UTILS
+// TAP CONTROL (THIS FIXES YOUR PROBLEM)
 // =========================================================
+let TAP_LOCKED = false;
+let LAST_TAP_TS = 0;
+
+function withTapLock(fn){
+  const now = Date.now();
+  // block double fire (pointerdown + click) + rapid double taps
+  if (TAP_LOCKED) return;
+  if (now - LAST_TAP_TS < 350) return;
+
+  TAP_LOCKED = true;
+  LAST_TAP_TS = now;
+
+  try { fn(); }
+  finally {
+    // short lock window
+    setTimeout(()=>{ TAP_LOCKED = false; }, 220);
+  }
+}
+
+// “Safe tap”: only fires once and prevents browser ghost clicks.
+function bindSafeTap(el, handler){
+  if(!el) return;
+
+  el.addEventListener('pointerdown', (e)=>{
+    // only primary pointer
+    if(e.pointerType === 'mouse' && e.button !== 0) return;
+    try { e.preventDefault(); } catch {}
+    try { e.stopPropagation(); } catch {}
+
+    withTapLock(()=>handler(e));
+  }, { passive:false });
+
+  // kill click fallback/ghost
+  el.addEventListener('click', (e)=>{
+    try { e.preventDefault(); } catch {}
+    try { e.stopPropagation(); } catch {}
+  }, { passive:false });
+}
+
 function safe(v){ return (v ?? '').toString().trim(); }
 
 function setError(msg){
@@ -68,15 +107,6 @@ function escapeHtml(str){
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'","&#039;");
-}
-
-// Stop iOS double-tap zoom / focus behavior on rapid taps
-function killTapWeirdness(e){
-  if(!e) return;
-  try { e.preventDefault(); } catch {}
-  try { e.stopPropagation(); } catch {}
-  const el = e.currentTarget;
-  if(el && el.blur) try { el.blur(); } catch {}
 }
 
 function formatCustomerNameHTML(full){
@@ -164,9 +194,7 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// LOCATION (locCode) SORTING
-// 1) Aisle B zipper FIRST: B-N-01, B-S-01, B-N-02, B-S-02 ...
-// 2) Aisle A SECOND: A-11 → A-01 (descending)
+// LOCATION SORTING
 // =========================================================
 function parseLocCode(locCode){
   const s = safe(locCode).toUpperCase();
@@ -196,7 +224,7 @@ function locLabel(locCode){
 }
 
 // =========================================================
-// PARSE SHEET HELPERS (TOLERANT)
+// PARSE SHEET HELPERS
 // =========================================================
 function buildHeaderMap(headerRow){
   const map = {};
@@ -219,42 +247,26 @@ function mustHaveHeadersOrders(hmap){
 }
 
 // =========================================================
-// VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
-// - Reads QtyPerPackItem
-// - Robust title matching (handles "- 28 Pack" suffixes, etc.)
+// VARIETY PACK EXPANSION
 // =========================================================
 function stripVendorPrefix(title){
-  // Example: "Designated Drinks (Non-Alcoholic) Dry January Super 31 Pack" -> "Dry January Super 31 Pack"
   const t = safe(title);
-  const m = t.match(/^\s*.*?\)\s*(.+)$/); // everything after first ")"
+  const m = t.match(/^\s*.*?\)\s*(.+)$/);
   return m ? safe(m[1]) : t;
 }
-
 function normalizePackTitle(title){
   let t = safe(title);
-
-  // remove vendor prefix
   t = stripVendorPrefix(t);
-
-  // normalize dash characters
   t = t.replace(/[–—]/g, '-');
-
-  // If it ends like "... - 28 Pack - 28 Pack", collapse to "... - 28 Pack"
   t = t.replace(/(\b\d+\s*pack\b)\s*-\s*\1\b\s*$/i, '$1');
-
-  // If it ends like "... Super 31 Pack - 31 Pack", remove the trailing "- 31 Pack"
   t = t.replace(/\s*-\s*\d+\s*pack\b\s*$/i, '');
-
   return normalizeText(t);
 }
-
 function buildVarietyPackMap(values){
   const out = new Map();
   if(!values || values.length < 2) return out;
 
   const hmap = buildHeaderMap(values[0]);
-
-  // Your exact headers + a few safe aliases
   const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
   const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
   const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
@@ -286,21 +298,19 @@ function buildVarietyPackMap(values){
 
   return out;
 }
-
 function findVarietyPackRule(itemTitle){
   return VARIETY_PACK_MAP.get(normalizePackTitle(itemTitle)) || null;
 }
-
 function expandVarietyPackRow(r){
   const rule = findVarietyPackRule(r.itemTitle);
   if(!rule) return [r];
 
   const out = [];
-  const packCount = Math.max(1, r.units || 1); // number of packs ordered
+  const packCount = Math.max(1, r.units || 1);
 
   for(const c of (rule.components || [])){
     const perPack = Math.max(1, toIntQty(c.qty));
-    const qtyUnits = perPack * packCount; // ✅ multiplier logic (QtyPerPackItem × #packs)
+    const qtyUnits = perPack * packCount;
     if(qtyUnits <= 0) continue;
 
     out.push({
@@ -359,7 +369,6 @@ function buildLookupMap(values){
   if(!values || values.length < 2) return new Map();
 
   const hmap = buildHeaderMap(values[0]);
-
   const idxTitle = pickHeader(hmap, ['itemtitle','item title','title','product']);
   const idxImg   = pickHeader(hmap, ['imageurl','image url','img','beer image url']);
   const idxLoc   = pickHeader(hmap, ['loccode','loc code','location','bin','aisle']);
@@ -430,8 +439,7 @@ function boxLabel(totalCans){
 }
 
 // =========================================================
-// BUILD ORDERS (JOIN with ImageLookup + VARIETY EXPANSION)
-// SORT = LOCATION ONLY (B zipper first, then A descending)
+// BUILD ORDERS
 // =========================================================
 function buildOrders(rows, lookupMap){
   const byOrder = new Map();
@@ -466,7 +474,6 @@ function buildOrders(rows, lookupMap){
 
         if(!merged.has(k)){
           const loc = lu?.locCode ? parseLocCode(lu.locCode) : null;
-
           const imgCandidate = lu?.imageUrl || r.imageUrl;
           const imgResolved = resolveImage(imgCandidate, r.itemTitle);
 
@@ -474,10 +481,8 @@ function buildOrders(rows, lookupMap){
             key: k,
             itemTitle: r.itemTitle,
             qtyCans: 0,
-
             locCode: lu?.locCode || '',
             locSort: loc?.sortKey || [99,999,0],
-
             imageResolved: imgResolved,
             sources: []
           });
@@ -554,6 +559,10 @@ function setOrderBar(){
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
+  // 🔴 total cans big number
+  const totalCansEl = $('totalCans');
+  if(totalCansEl) totalCansEl.textContent = `${total}`;
+
   $('progressFill').style.width = `${pct}%`;
   $('progressLeft').textContent = `${picked} picked`;
   $('progressRight').textContent = `${total} total`;
@@ -581,8 +590,9 @@ function renderList(){
     `;
   }).join('');
 
+  // IMPORTANT: list rows ONLY jump, never pick.
   body.querySelectorAll('.listRow').forEach(row=>{
-    row.addEventListener('click', ()=>{
+    bindSafeTap(row, ()=>{
       const k = row.getAttribute('data-key');
       const pos = queue.findIndex(q => q.key === k);
       if(pos >= 0){ queueIndex = pos; renderAll(); }
@@ -608,24 +618,28 @@ function setNextCard(item, qtyId, aisleId, imgId){
 function setQtyMode(mode, numberText){
   const num = $('curQtyNumber');
   const done = $('curQtyDone');
+  const unit = document.querySelector('.qtyUnit');
+
   if(!num || !done) return;
 
   if(mode === 'done'){
     num.style.display = 'none';
+    if(unit) unit.style.display = 'none';
     done.style.display = 'grid';
   }else{
     done.style.display = 'none';
     num.style.display = 'block';
+    if(unit) unit.style.display = 'block';
     num.textContent = numberText ?? '—';
   }
 }
 
 function renderCurrent(){
   const o = currentOrder();
-  const nextPickBtn = $('btnPickNext');
+  const pickBtn = $('btnPickNext');
 
   if(!o){
-    if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
+    if(pickBtn) pickBtn.style.visibility = 'visible';
     $('curTitle').textContent = 'No orders found';
     $('curSub').textContent = '';
     setQtyMode('qty', '—');
@@ -642,20 +656,17 @@ function renderCurrent(){
   const cur = queue[queueIndex];
 
   if(!cur){
-    if(nextPickBtn) nextPickBtn.style.visibility = 'hidden';
-
+    if(pickBtn) pickBtn.style.visibility = 'hidden';
     $('curTitle').textContent = 'ORDER PICKED';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curImg').src = './done.svg';
-
     setQtyMode('done');
-
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
     return;
   }
 
-  if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
+  if(pickBtn) pickBtn.style.visibility = 'visible';
 
   $('curTitle').textContent = cur.itemTitle;
 
@@ -667,7 +678,6 @@ function renderCurrent(){
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
-
   $('curImg').src = cur.imageResolved;
 
   setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
@@ -694,13 +704,6 @@ function pickCurrent(){
 
   setPicked(o.orderId, cur.key, true);
   undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
-
-  const q = $('curQtyNumber');
-  if(q){
-    q.classList.remove('flash');
-    void q.offsetWidth;
-    q.classList.add('flash');
-  }
 
   renderAll();
 }
@@ -772,20 +775,14 @@ function resetThisOrder(){
   queueIndex = 0;
 
   renderAll();
-  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
 }
 
-function qtyPillClick(e){
-  if(e) killTapWeirdness(e);
-
+function qtyPillClick(){
   const o = currentOrder();
   if(!o) return;
-
   rebuildQueue();
   const done = (queue.length === 0);
-  if(!done) return;
-
-  nextOrder();
+  if(done) nextOrder();
 }
 
 // =========================================================
@@ -793,38 +790,24 @@ function qtyPillClick(e){
 // =========================================================
 async function init(){
   try{
-    $('btnSkip')?.addEventListener('click', skipCurrent);
-    $('btnUndo')?.addEventListener('click', undoLast);
-    $('btnPrevOrder')?.addEventListener('click', prevOrder);
-    $('btnNextOrder')?.addEventListener('click', nextOrder);
-    $('btnResetOrder')?.addEventListener('click', resetThisOrder);
+    // Bind safe taps (NO global pick area)
+    bindSafeTap($('btnSkip'), skipCurrent);
+    bindSafeTap($('btnUndo'), undoLast);
+    bindSafeTap($('btnPrevOrder'), prevOrder);
+    bindSafeTap($('btnNextOrder'), nextOrder);
+    bindSafeTap($('btnResetOrder'), resetThisOrder);
 
-    $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      pickCurrent();
-    }, { passive:false });
+    // ✅ ONLY PICK BUTTON can pick
+    bindSafeTap($('btnPickNext'), pickCurrent);
 
-    $('tapPickArea')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      pickCurrent();
-    }, { passive:false });
+    // Next preview buttons ONLY jump
+    bindSafeTap($('next1'), ()=>jumpNext(1));
+    bindSafeTap($('next2'), ()=>jumpNext(2));
 
-    $('next1')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      jumpNext(1);
-    }, { passive:false });
+    // Qty pill ONLY advances to next order when done
+    bindSafeTap($('curQty'), qtyPillClick);
 
-    $('next2')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      jumpNext(2);
-    }, { passive:false });
-
-    $('curQty')?.addEventListener('pointerdown', (e)=>{
-      killTapWeirdness(e);
-      qtyPillClick(e);
-    }, { passive:false });
-
-    // ✅ Load all 3 sheets (Warehouse Orders + Warehouse ImageLookup + Variety Packs)
+    // Load all 3 sheets
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
@@ -835,11 +818,8 @@ async function init(){
     if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
 
     const lookupValues = lookupJson.values || [];
-    if(lookupValues.length < 2) {
-      console.warn('ImageLookup sheet has no data (continuing).');
-    }
-
     const varietyValues = varietyJson.values || [];
+
     if(varietyValues.length >= 2){
       VARIETY_PACK_MAP = buildVarietyPackMap(varietyValues);
       console.log('Variety packs loaded:', VARIETY_PACK_MAP.size);
@@ -854,7 +834,6 @@ async function init(){
     mustHaveHeadersOrders(hmap);
 
     const rows = ordersValues.slice(1).map(r => rowToOrderObj(r, hmap)).filter(Boolean);
-
     orders = buildOrders(rows, lookupMap);
 
     if(!orders.length){
