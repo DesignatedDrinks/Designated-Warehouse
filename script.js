@@ -2,11 +2,15 @@
 // CONFIG
 // =========================================================
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-const sheetName = 'Orders';
+const ordersSheetName = 'Orders';
+const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly
 const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
 
 const ordersUrl =
-  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
+  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
+
+const lookupUrl =
+  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(lookupSheetName)}?alt=json&key=${apiKey}`;
 
 const $ = (id) => document.getElementById(id);
 
@@ -73,14 +77,6 @@ function formatCustomerNameHTML(full){
   return `${escapeHtml(parts.join(' '))} <strong>${escapeHtml(last)}</strong>`;
 }
 
-function firstNameInitial(fullName){
-  const n = safe(fullName);
-  if(!n) return '—';
-  const parts = n.split(/\s+/).filter(Boolean);
-  if(parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[parts.length-1]}`; // full last name
-}
-
 function cityProvince(address){
   const a = safe(address);
   if(!a) return '—';
@@ -109,8 +105,13 @@ function resolveImage(url, title){
 
 async function fetchJson(url){
   const res = await fetch(url);
-  if(!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  if(!res.ok){
+    // Show actual Google error body — this is what you need when it fails.
+    throw new Error(`Fetch failed: ${res.status}\n${text}`);
+  }
+  try { return JSON.parse(text); }
+  catch { throw new Error(`Invalid JSON from Sheets API:\n${text.slice(0,500)}`); }
 }
 
 // =========================================================
@@ -170,67 +171,40 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// LOCATION SORTING — YOUR ACTUAL WAREHOUSE LOGIC
-// Aisle A: single side, pick A-11 -> A-01 (DESC)
-// Aisle B: zipper: B-N-01, B-S-01, B-N-02, B-S-02 ...
+// LOCATION (locCode) SORTING — YOUR WAREHOUSE LOGIC
+// Aisle A: A-11 ... A-01  (descending)
+// Aisle B zipper: B-N-01, B-S-01, B-N-02, B-S-02 ...
 // =========================================================
-function parseLocCode(locCode = "") {
-  const clean = safe(locCode).toUpperCase();
-  const parts = clean.split("-").map(p => p.trim()).filter(Boolean);
+function parseLocCode(locCode){
+  const s = safe(locCode).toUpperCase();
+  if(!s) return null;
 
-  // A-01
-  if(parts.length === 2){
-    const [aisle, bayStr] = parts;
-    const bay = Number(bayStr);
-    return {
-      raw: clean,
-      aisle,
-      side: null,
-      bay: Number.isFinite(bay) ? bay : 999
-    };
+  // A-11, A-01
+  let m = s.match(/^A-(\d{1,2})$/);
+  if(m){
+    const n = parseInt(m[1],10);
+    if(!Number.isFinite(n)) return null;
+    // Aisle A sort: higher number first
+    return { zone:'A', idx:n, side:'', sortKey: [1, -n, 0] };
   }
 
-  // B-N-01
-  if(parts.length === 3){
-    const [aisle, side, bayStr] = parts;
-    const bay = Number(bayStr);
-    return {
-      raw: clean,
-      aisle,
-      side,
-      bay: Number.isFinite(bay) ? bay : 999
-    };
+  // B-N-01, B-S-01
+  m = s.match(/^B-([NS])-(\d{1,2})$/);
+  if(m){
+    const side = m[1];
+    const n = parseInt(m[2],10);
+    if(!Number.isFinite(n)) return null;
+    // zipper: idx ascending, N before S
+    const sideOrder = (side === 'N') ? 0 : 1;
+    return { zone:'B', idx:n, side, sortKey: [2, n, sideOrder] };
   }
 
-  return { raw: clean, aisle: "Z", side: "Z", bay: 999 };
+  return { zone:'?', idx:999, side:'', sortKey: [99, 999, 0] };
 }
 
-function locSortKey(locCode){
-  const { aisle, side, bay } = parseLocCode(locCode);
-
-  // Aisle A: A-11 -> A-01 (DESC)
-  if(aisle === "A"){
-    const MAX_A_BAY = 11; // <-- change ONLY if aisle A bays change
-    return (bay >= 0 && bay <= MAX_A_BAY) ? (MAX_A_BAY - bay) : 999;
-  }
-
-  // Aisle B zipper: N then S per bay
-  if(aisle === "B"){
-    const sideRank =
-      side === "N" ? 1 :
-      side === "S" ? 2 :
-      9;
-    return 1000 + (bay * 10) + sideRank;
-  }
-
-  // Unknown aisles go last
-  return 9000 + bay;
-}
-
-function displayLocation(locCode){
-  // what you show in UI under the title
-  const lc = safe(locCode).toUpperCase();
-  return lc ? `Loc: ${lc}` : `Loc: —`;
+function locLabel(locCode){
+  const s = safe(locCode);
+  return s || '—';
 }
 
 // =========================================================
@@ -281,7 +255,7 @@ function boxLabel(totalCans){
 }
 
 // =========================================================
-// PARSE SHEET
+// PARSE SHEET HELPERS
 // =========================================================
 function buildHeaderMap(headerRow){
   const map = {};
@@ -289,18 +263,22 @@ function buildHeaderMap(headerRow){
   return map;
 }
 
-function mustHaveHeaders(hmap){
-  // ADDED: locCode
-  const required = [
-    'orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl','loccode'
-  ];
+function mustHaveHeadersOrders(hmap){
+  // Orders has NO locCode
+  const required = ['orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'];
   const missing = required.filter(k => !(k in hmap));
-  if(missing.length) throw new Error(`Sheet headers missing: ${missing.join(', ')}`);
+  if(missing.length) throw new Error(`Orders headers missing: ${missing.join(', ')}`);
 }
 
-function rowToObj(row, hmap){
-  const get = key => row[hmap[key]] ?? '';
+function mustHaveHeadersLookup(hmap){
+  // ImageLookup: itemTitle, imageUrl, locCode (locCode can be blank for some, but header must exist)
+  const required = ['itemtitle','imageurl','loccode'];
+  const missing = required.filter(k => !(k in hmap));
+  if(missing.length) throw new Error(`ImageLookup headers missing: ${missing.join(', ')}`);
+}
 
+function rowToOrderObj(row, hmap){
+  const get = key => row[hmap[key]] ?? '';
   const itemTitle = safe(get('itemtitle'));
   const variantTitle = safe(get('varianttitle'));
   const units = toIntQty(get('qty'));
@@ -318,16 +296,35 @@ function rowToObj(row, hmap){
     cans,
     picked: parseBool(get('picked')),
     notes: safe(get('notes')),
-    imageUrl: safe(get('imageurl')),
-    locCode: safe(get('loccode')), // <-- NEW
+    imageUrl: safe(get('imageurl')), // may be blank, lookup can override
   };
-
   if(!r.orderId && !r.itemTitle && !r.customerName) return null;
   if(normalizeText(r.itemTitle) === 'itemtitle') return null;
   return r;
 }
 
-function buildOrders(rows){
+function buildLookupMap(values){
+  if(!values || values.length < 2) return new Map();
+
+  const hmap = buildHeaderMap(values[0]);
+  mustHaveHeadersLookup(hmap);
+
+  const out = new Map();
+  for(const row of values.slice(1)){
+    const itemTitle = safe(row[hmap['itemtitle']] ?? '');
+    if(!itemTitle) continue;
+    const key = itemKeyByTitle(itemTitle);
+    const imageUrl = safe(row[hmap['imageurl']] ?? '');
+    const locCode  = safe(row[hmap['loccode']] ?? '');
+    out.set(key, { imageUrl, locCode, rawTitle: itemTitle });
+  }
+  return out;
+}
+
+// =========================================================
+// BUILD ORDERS (JOIN with ImageLookup)
+// =========================================================
+function buildOrders(rows, lookupMap){
   const byOrder = new Map();
 
   for(const r of rows){
@@ -353,30 +350,37 @@ function buildOrders(rows){
       if(r.cans <= 0) continue;
 
       const k = itemKeyByTitle(r.itemTitle);
+      const lu = lookupMap.get(k);
 
       if(!merged.has(k)){
+        const loc = lu?.locCode ? parseLocCode(lu.locCode) : null;
+
+        // image: lookup wins, else Orders, else placeholder
+        const imgCandidate = lu?.imageUrl || r.imageUrl;
+        const imgResolved = resolveImage(imgCandidate, r.itemTitle);
+
         merged.set(k, {
           key: k,
           itemTitle: r.itemTitle,
           qtyCans: 0,
-          locCode: safe(r.locCode),          // <-- NEW
-          locSort: locSortKey(r.locCode),    // <-- NEW
-          imageResolved: resolveImage(r.imageUrl, r.itemTitle),
+
+          // show locCode on screen
+          locCode: lu?.locCode || '',
+
+          // sorting
+          locSort: loc?.sortKey || [99,999,0],
+
+          imageResolved: imgResolved,
           sources: []
         });
       }
 
       const item = merged.get(k);
 
-      // If first image was placeholder but later row has a real url, adopt it
-      if(item.imageResolved.startsWith('data:image') && r.imageUrl && r.imageUrl.startsWith('http')){
-        item.imageResolved = r.imageUrl;
-      }
-
-      // If locCode is blank on first row but exists on a later row, take it
-      if(!safe(item.locCode) && safe(r.locCode)){
-        item.locCode = safe(r.locCode);
-        item.locSort = locSortKey(item.locCode);
+      // If item currently placeholder but we now have a real url, swap in
+      const candidate = (lookupMap.get(k)?.imageUrl || r.imageUrl || '');
+      if(item.imageResolved.startsWith('data:image') && safe(candidate).startsWith('http')){
+        item.imageResolved = candidate;
       }
 
       item.qtyCans += r.cans;
@@ -384,15 +388,20 @@ function buildOrders(rows){
     }
 
     const items = Array.from(merged.values()).sort((a,b)=>{
-      // 1) Brand priority
+      // brand priority first (your existing rule)
       const pa = brandPriority(a.itemTitle);
       const pb = brandPriority(b.itemTitle);
       if(pa !== pb) return pa - pb;
 
-      // 2) Your warehouse path (A then B zipper etc.)
-      if(a.locSort !== b.locSort) return a.locSort - b.locSort;
+      // then warehouse path by locCode sortKey
+      const as = a.locSort, bs = b.locSort;
+      for(let i=0;i<Math.max(as.length, bs.length);i++){
+        const av = as[i] ?? 0;
+        const bv = bs[i] ?? 0;
+        if(av !== bv) return av - bv;
+      }
 
-      // 3) Stable tie-break
+      // tie-breaker: title
       return a.itemTitle.localeCompare(b.itemTitle);
     });
 
@@ -460,11 +469,12 @@ function renderList(){
   body.innerHTML = o.items.map((it)=>{
     const done = isPicked(o.orderId, it.key);
     const src = it.sources?.length ? ` · ${escapeHtml(formatSourceBreakdown(it.sources))}` : '';
+    const loc = it.locCode ? ` · <strong>${escapeHtml(locLabel(it.locCode))}</strong>` : '';
     return `
       <div class="listRow ${done ? 'done' : ''}" data-key="${it.key}">
         <div>
           <div class="lTitle">${escapeHtml(it.itemTitle)}</div>
-          <div class="lSub">${escapeHtml(displayLocation(it.locCode))}${src}</div>
+          <div class="lSub">${loc}${src}</div>
         </div>
         <div class="lQty">${it.qtyCans}</div>
       </div>
@@ -491,7 +501,7 @@ function setNextCard(item, qtyId, aisleId, imgId){
     return;
   }
   q.textContent = `${item.qtyCans}`;
-  a.textContent = safe(item.locCode).toUpperCase() || '—'; // show actual locCode
+  a.textContent = item.locCode ? locLabel(item.locCode) : '—';
   im.src = item.imageResolved;
 }
 
@@ -551,8 +561,10 @@ function renderCurrent(){
   $('curTitle').textContent = cur.itemTitle;
 
   const srcText = cur.sources?.length ? formatSourceBreakdown(cur.sources) : '';
+  const locText = cur.locCode ? locLabel(cur.locCode) : '—';
+
   $('curSub').innerHTML =
-    `<span class="badge">${escapeHtml(safe(cur.locCode).toUpperCase() || 'LOC—')}</span>` +
+    `<span class="badge">${escapeHtml(locText)}</span>` +
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
@@ -717,18 +729,32 @@ async function init(){
       qtyPillClick(e);
     }, { passive:false });
 
-    const j = await fetchJson(ordersUrl);
-    const values = j.values || [];
-    if(values.length < 2) throw new Error('Orders sheet has no data.');
+    // 1) Fetch both sheets
+    const [ordersJson, lookupJson] = await Promise.all([
+      fetchJson(ordersUrl),
+      fetchJson(lookupUrl),
+    ]);
 
-    const hmap = buildHeaderMap(values[0]);
-    mustHaveHeaders(hmap);
+    const ordersValues = ordersJson.values || [];
+    if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
 
-    const rows = values.slice(1).map(r => rowToObj(r, hmap)).filter(Boolean);
-    orders = buildOrders(rows);
+    const lookupValues = lookupJson.values || [];
+    if(lookupValues.length < 2) throw new Error('ImageLookup sheet has no data.');
+
+    // 2) Parse ImageLookup into a map
+    const lookupMap = buildLookupMap(lookupValues);
+
+    // 3) Parse Orders rows
+    const hmap = buildHeaderMap(ordersValues[0]);
+    mustHaveHeadersOrders(hmap);
+
+    const rows = ordersValues.slice(1).map(r => rowToOrderObj(r, hmap)).filter(Boolean);
+
+    // 4) Build orders with lookup join
+    orders = buildOrders(rows, lookupMap);
 
     if(!orders.length){
-      setError('No valid orders built. Check orderid + itemTitle + qty + locCode columns.');
+      setError('No valid orders built. Check orderId + itemTitle + qty columns.');
     }
 
     renderAll();
