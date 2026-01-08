@@ -8,8 +8,8 @@ const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly (Designate
 const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us'; // ✅ Variety Packs file
 const varietySheetName = 'Variety Packs'; // MUST match tab name exactly (Variety Packs file)
 
-const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
-  .replace('AIzaSyA7sSHMaY7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
+const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
+  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
 
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
@@ -33,33 +33,6 @@ const STORAGE_KEY = 'dw_picked_queue_v1';
 
 // ✅ Built at runtime from Variety Packs sheet
 let VARIETY_PACK_MAP = new Map(); // key(normalized pack title) => { packTitle, components:[{title, qty}] }
-
-// =========================================================
-// TAP SAFETY (THIS IS THE BIG FIX)
-// =========================================================
-// Hard lockout so double taps / ghost taps can't double-pick.
-let PICK_LOCK_UNTIL = 0;
-const PICK_LOCK_MS = 550;
-
-function nowMs(){ return Date.now(); }
-function pickLocked(){ return nowMs() < PICK_LOCK_UNTIL; }
-function lockPick(){ PICK_LOCK_UNTIL = nowMs() + PICK_LOCK_MS; }
-
-function stopTap(e){
-  if(!e) return;
-  try { e.preventDefault(); } catch {}
-  try { e.stopPropagation(); } catch {}
-}
-
-// Safe bind for buttons: pointerdown only, never "click".
-// (click is where ghost taps and delayed mobile clicks bite you)
-function bindSafeTap(el, handler){
-  if(!el) return;
-  el.addEventListener('pointerdown', (e)=>{
-    stopTap(e);
-    handler(e);
-  }, { passive:false });
-}
 
 // =========================================================
 // UTILS
@@ -95,6 +68,21 @@ function escapeHtml(str){
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'","&#039;");
+}
+
+// ✅ singular/plural label for "can/cans"
+function canLabel(n){
+  const x = Number(n);
+  return (Number.isFinite(x) && x === 1) ? 'can' : 'cans';
+}
+
+// Stop iOS double-tap zoom / focus behavior on rapid taps
+function killTapWeirdness(e){
+  if(!e) return;
+  try { e.preventDefault(); } catch {}
+  try { e.stopPropagation(); } catch {}
+  const el = e.currentTarget;
+  if(el && el.blur) try { el.blur(); } catch {}
 }
 
 function formatCustomerNameHTML(full){
@@ -239,20 +227,29 @@ function mustHaveHeadersOrders(hmap){
 // =========================================================
 // VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
 // - Reads QtyPerPackItem
-// - Robust title matching
+// - Robust title matching (handles "- 28 Pack" suffixes, etc.)
 // =========================================================
 function stripVendorPrefix(title){
   const t = safe(title);
-  const m = t.match(/^\s*.*?\)\s*(.+)$/);
+  const m = t.match(/^\s*.*?\)\s*(.+)$/); // everything after first ")"
   return m ? safe(m[1]) : t;
 }
 
 function normalizePackTitle(title){
   let t = safe(title);
+
+  // remove vendor prefix
   t = stripVendorPrefix(t);
+
+  // normalize dash characters
   t = t.replace(/[–—]/g, '-');
+
+  // If it ends like "... - 28 Pack - 28 Pack", collapse to "... - 28 Pack"
   t = t.replace(/(\b\d+\s*pack\b)\s*-\s*\1\b\s*$/i, '$1');
+
+  // If it ends like "... Super 31 Pack - 31 Pack", remove the trailing "- 31 Pack"
   t = t.replace(/\s*-\s*\d+\s*pack\b\s*$/i, '');
+
   return normalizeText(t);
 }
 
@@ -303,11 +300,11 @@ function expandVarietyPackRow(r){
   if(!rule) return [r];
 
   const out = [];
-  const packCount = Math.max(1, r.units || 1);
+  const packCount = Math.max(1, r.units || 1); // number of packs ordered
 
   for(const c of (rule.components || [])){
     const perPack = Math.max(1, toIntQty(c.qty));
-    const qtyUnits = perPack * packCount;
+    const qtyUnits = perPack * packCount; // ✅ multiplier logic (QtyPerPackItem × #packs)
     if(qtyUnits <= 0) continue;
 
     out.push({
@@ -438,7 +435,7 @@ function boxLabel(totalCans){
 
 // =========================================================
 // BUILD ORDERS (JOIN with ImageLookup + VARIETY EXPANSION)
-// SORT = LOCATION ONLY
+// SORT = LOCATION ONLY (B zipper first, then A descending)
 // =========================================================
 function buildOrders(rows, lookupMap){
   const byOrder = new Map();
@@ -561,10 +558,6 @@ function setOrderBar(){
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
-  // ✅ NEW BIG TOTAL CANS FIELD
-  const totalEl = $('totalCans');
-  if(totalEl) totalEl.textContent = `${total}`;
-
   $('progressFill').style.width = `${pct}%`;
   $('progressLeft').textContent = `${picked} picked`;
   $('progressRight').textContent = `${total} total`;
@@ -592,13 +585,12 @@ function renderList(){
     `;
   }).join('');
 
-  // ✅ list rows can still jump (optional), but do NOT pick.
   body.querySelectorAll('.listRow').forEach(row=>{
     row.addEventListener('click', ()=>{
       const k = row.getAttribute('data-key');
       const pos = queue.findIndex(q => q.key === k);
       if(pos >= 0){ queueIndex = pos; renderAll(); }
-    }, { passive:true });
+    });
   });
 }
 
@@ -617,6 +609,7 @@ function setNextCard(item, qtyId, aisleId, imgId){
   im.src = item.imageResolved;
 }
 
+// ✅ UPDATED: sets unit label to "can/cans"
 function setQtyMode(mode, numberText){
   const num = $('curQtyNumber');
   const done = $('curQtyDone');
@@ -631,7 +624,13 @@ function setQtyMode(mode, numberText){
     done.style.display = 'none';
     num.style.display = 'block';
     if(unit) unit.style.display = 'block';
+
+    const qty = Number(numberText);
     num.textContent = numberText ?? '—';
+
+    if(unit){
+      unit.textContent = canLabel(qty);
+    }
   }
 }
 
@@ -682,6 +681,7 @@ function renderCurrent(){
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
+
   $('curImg').src = cur.imageResolved;
 
   setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
@@ -697,13 +697,8 @@ function renderAll(){
 // ACTIONS
 // =========================================================
 function pickCurrent(){
-  // ✅ HARD GATE: stops double taps, ghost taps, and spam.
-  if(pickLocked()) return;
-  lockPick();
-
   const o = currentOrder();
   if(!o) return;
-
   rebuildQueue();
   const cur = queue[queueIndex];
   if(!cur) return;
@@ -713,6 +708,13 @@ function pickCurrent(){
 
   setPicked(o.orderId, cur.key, true);
   undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
+
+  const q = $('curQtyNumber');
+  if(q){
+    q.classList.remove('flash');
+    void q.offsetWidth;
+    q.classList.add('flash');
+  }
 
   renderAll();
 }
@@ -738,6 +740,15 @@ function undoLast(){
   }
 
   renderAll();
+}
+
+function jumpNext(offset){
+  rebuildQueue();
+  const target = queueIndex + offset;
+  if(target >= 0 && target <= queue.length - 1){
+    queueIndex = target;
+    renderAll();
+  }
 }
 
 function prevOrder(){
@@ -778,9 +789,8 @@ function resetThisOrder(){
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
 }
 
-// Qty pill click: ONLY advances order when DONE.
 function qtyPillClick(e){
-  stopTap(e);
+  if(e) killTapWeirdness(e);
 
   const o = currentOrder();
   if(!o) return;
@@ -797,23 +807,38 @@ function qtyPillClick(e){
 // =========================================================
 async function init(){
   try{
-    // ✅ Only bind taps to actual buttons.
-    bindSafeTap($('btnSkip'), skipCurrent);
-    bindSafeTap($('btnUndo'), undoLast);
-    bindSafeTap($('btnPrevOrder'), prevOrder);
-    bindSafeTap($('btnNextOrder'), nextOrder);
-    bindSafeTap($('btnResetOrder'), resetThisOrder);
+    $('btnSkip')?.addEventListener('click', skipCurrent);
+    $('btnUndo')?.addEventListener('click', undoLast);
+    $('btnPrevOrder')?.addEventListener('click', prevOrder);
+    $('btnNextOrder')?.addEventListener('click', nextOrder);
+    $('btnResetOrder')?.addEventListener('click', resetThisOrder);
 
-    // ✅ ONLY PICK BUTTON PICKS.
-    bindSafeTap($('btnPickNext'), pickCurrent);
+    $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      pickCurrent();
+    }, { passive:false });
 
-    // ✅ Qty pill only does "Next order" when done.
-    bindSafeTap($('curQty'), qtyPillClick);
+    $('tapPickArea')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      pickCurrent();
+    }, { passive:false });
 
-    // ❌ IMPORTANT: DO NOT bind anything to preview cards (next1/next2) or tapPickArea.
-    // If those existed before, they are the reason “any tap advances”.
+    $('next1')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      jumpNext(1);
+    }, { passive:false });
 
-    // ✅ Load all 3 sheets
+    $('next2')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      jumpNext(2);
+    }, { passive:false });
+
+    $('curQty')?.addEventListener('pointerdown', (e)=>{
+      killTapWeirdness(e);
+      qtyPillClick(e);
+    }, { passive:false });
+
+    // ✅ Load all 3 sheets (Warehouse Orders + Warehouse ImageLookup + Variety Packs)
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
