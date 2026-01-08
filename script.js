@@ -1,15 +1,12 @@
 // =========================================================
 // CONFIG
 // =========================================================
-const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g'; // ✅ Designated Warehouse file
 const ordersSheetName = 'Orders';
-const lookupSheetName = 'ImageLookup';
+const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly (Designated Warehouse file)
 
-// IMPORTANT:
-// This must match the TAB NAME at the bottom of the spreadsheet.
-// If your tab is literally named "Variety Packs" keep it exactly like this.
-// If it is "VarietyPacks" (no space) change it to that.
-const varietySheetName = 'Variety Packs';
+const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us'; // ✅ Variety Packs file
+const varietySheetName = 'Variety Packs'; // MUST match tab name exactly (Variety Packs file)
 
 const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
   .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
@@ -21,7 +18,7 @@ const lookupUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(lookupSheetName)}?alt=json&key=${apiKey}`;
 
 const varietyUrl =
-  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(varietySheetName)}?alt=json&key=${apiKey}`;
+  `https://sheets.googleapis.com/v4/spreadsheets/${varietySheetId}/values/${encodeURIComponent(varietySheetName)}?alt=json&key=${apiKey}`;
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,8 +31,8 @@ let queueIndex = 0;
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v1';
 
-// Holds variety pack rules loaded from the sheet
-let VARIETY_MAP = new Map(); // key: normalized pack title, value: [{title, imageUrl, qtyPerPack}...]
+// ✅ Built at runtime from Variety Packs sheet
+let VARIETY_PACK_MAP = new Map(); // key(normalized pack title) => { packTitle, components:[{title, qty}] }
 
 // =========================================================
 // UTILS
@@ -167,7 +164,7 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// LOCATION (locCode) SORTING — FINAL RULES
+// LOCATION (locCode) SORTING
 // 1) Aisle B zipper FIRST: B-N-01, B-S-01, B-N-02, B-S-02 ...
 // 2) Aisle A SECOND: A-11 → A-01 (descending)
 // =========================================================
@@ -199,60 +196,58 @@ function locLabel(locCode){
 }
 
 // =========================================================
-// VARIETY PACKS (AUTO-LOADED FROM SHEET: "Variety Packs")
+// VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
 // =========================================================
-function mustHaveHeadersVariety(hmap){
-  const required = ['variety pack name','beer name','beer image url','qtyperpackitem'];
-  const missing = required.filter(k => !(k in hmap));
-  if(missing.length) throw new Error(`Variety sheet headers missing: ${missing.join(', ')}`);
-}
-
-function buildVarietyMap(values){
-  if(!values || values.length < 2) return new Map();
-
-  const header = values[0].map(safe);
-  const idx = {};
-  header.forEach((h,i)=> idx[normalizeText(h)] = i);
-
-  mustHaveHeadersVariety(idx);
-
+function buildVarietyPackMap(values){
+  // values = [headerRow, ...rows]
   const out = new Map();
+  if(!values || values.length < 2) return out;
+
+  const hmap = buildHeaderMap(values[0]);
+
+  // tolerant header aliases
+  const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
+  const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
+  const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
+  // image url column exists but not required for expansion
+  // const colImg  = pickHeader(hmap, ['beer image url','beerimageurl','image url','imageurl','img']);
+
+  if(colPack == null || colBeer == null){
+    // Don't hard-fail — just return empty and let the app run without expansion.
+    return out;
+  }
 
   for(const row of values.slice(1)){
-    const packName = safe(row[idx['variety pack name']] ?? '');
-    const beerName = safe(row[idx['beer name']] ?? '');
-    const beerImg  = safe(row[idx['beer image url']] ?? '');
-    const qtyRaw   = row[idx['qtyperpackitem']] ?? '';
+    const packTitle = safe(row[colPack] ?? '');
+    const beerTitle = safe(row[colBeer] ?? '');
+    if(!packTitle || !beerTitle) continue;
 
-    if(!packName || !beerName) continue;
+    const qty = (colQty != null) ? Math.max(1, toIntQty(row[colQty] ?? 1)) : 1;
 
-    // Default qtyPerPackItem to 1 if blank/invalid
-    let qtyPerPack = toIntQty(qtyRaw);
-    if(qtyPerPack <= 0) qtyPerPack = 1;
+    const key = normalizeText(packTitle);
+    if(!out.has(key)) out.set(key, { packTitle, components: [] });
 
-    const key = normalizeText(packName);
-
-    if(!out.has(key)) out.set(key, []);
-    out.get(key).push({
-      title: beerName,
-      imageUrl: beerImg,
-      qtyPerPack
-    });
+    out.get(key).components.push({ title: beerTitle, qty });
   }
 
   return out;
 }
 
+function findVarietyPackRule(itemTitle){
+  const key = normalizeText(itemTitle);
+  return VARIETY_PACK_MAP.get(key) || null;
+}
+
 function expandVarietyPackRow(r){
-  const key = normalizeText(r.itemTitle);
-  const comps = VARIETY_MAP.get(key);
-  if(!comps || !comps.length) return [r];
+  const rule = findVarietyPackRule(r.itemTitle);
+  if(!rule) return [r];
 
   const out = [];
   const packCount = Math.max(1, r.units || 1); // number of packs ordered
 
-  for(const c of comps){
-    const qtyUnits = (c.qtyPerPack || 1) * packCount;
+  for(const c of (rule.components || [])){
+    const perPack = Math.max(1, toIntQty(c.qty));
+    const qtyUnits = perPack * packCount;
     if(qtyUnits <= 0) continue;
 
     out.push({
@@ -262,7 +257,6 @@ function expandVarietyPackRow(r){
       units: qtyUnits,
       packSize: 1,
       cans: qtyUnits,
-      imageUrl: c.imageUrl || r.imageUrl
     });
   }
 
@@ -317,47 +311,60 @@ function boxLabel(totalCans){
 }
 
 // =========================================================
-// PARSE SHEET HELPERS
+// PARSE SHEET HELPERS (TOLERANT)
 // =========================================================
 function buildHeaderMap(headerRow){
   const map = {};
-  headerRow.forEach((h, idx)=> map[normalizeText(h)] = idx);
+  (headerRow || []).forEach((h, idx)=> map[normalizeText(h)] = idx);
   return map;
 }
 
-function mustHaveHeadersOrders(hmap){
-  const required = ['orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'];
-  const missing = required.filter(k => !(k in hmap));
-  if(missing.length) throw new Error(`Orders headers missing: ${missing.join(', ')}`);
+function pickHeader(hmap, candidates){
+  for(const c of candidates){
+    const k = normalizeText(c);
+    if(k in hmap) return hmap[k];
+  }
+  return null;
 }
 
-function mustHaveHeadersLookup(hmap){
-  const required = ['itemtitle','imageurl','loccode'];
-  const missing = required.filter(k => !(k in hmap));
-  if(missing.length) throw new Error(`ImageLookup headers missing: ${missing.join(', ')}`);
+function mustHaveHeadersOrders(hmap){
+  // Minimum viable to run
+  const req = ['orderid','itemtitle','qty'];
+  const missing = req.filter(k => !(k in hmap));
+  if(missing.length) throw new Error(`Orders sheet missing required headers: ${missing.join(', ')}`);
 }
 
 function rowToOrderObj(row, hmap){
-  const get = key => row[hmap[key]] ?? '';
-  const itemTitle = safe(get('itemtitle'));
-  const variantTitle = safe(get('varianttitle'));
-  const units = toIntQty(get('qty'));
+  const idxOrderId = pickHeader(hmap, ['orderid','order id','id']);
+  const idxCust    = pickHeader(hmap, ['customername','customer name','customer']);
+  const idxAddr    = pickHeader(hmap, ['address','shipping address','ship address']);
+  const idxItem    = pickHeader(hmap, ['itemtitle','item title','title','product']);
+  const idxVar     = pickHeader(hmap, ['varianttitle','variant title','variant']);
+  const idxQty     = pickHeader(hmap, ['qty','quantity','q']);
+  const idxPicked  = pickHeader(hmap, ['picked','is picked']);
+  const idxNotes   = pickHeader(hmap, ['notes','note']);
+  const idxImg     = pickHeader(hmap, ['imageurl','image url','img']);
+
+  const itemTitle = safe(row[idxItem] ?? '');
+  const variantTitle = safe(row[idxVar] ?? '');
+  const units = toIntQty(row[idxQty] ?? '');
   const packSize = parsePackSize(itemTitle, variantTitle);
   const cans = units * packSize;
 
   const r = {
-    orderId: safe(get('orderid')),
-    customerName: safe(get('customername')),
-    address: safe(get('address')),
+    orderId: safe(row[idxOrderId] ?? ''),
+    customerName: safe(row[idxCust] ?? ''),
+    address: safe(row[idxAddr] ?? ''),
     itemTitle,
     variantTitle,
     units,
     packSize,
     cans,
-    picked: parseBool(get('picked')),
-    notes: safe(get('notes')),
-    imageUrl: safe(get('imageurl')),
+    picked: parseBool(row[idxPicked] ?? ''),
+    notes: safe(row[idxNotes] ?? ''),
+    imageUrl: safe(row[idxImg] ?? ''),
   };
+
   if(!r.orderId && !r.itemTitle && !r.customerName) return null;
   if(normalizeText(r.itemTitle) === 'itemtitle') return null;
   return r;
@@ -367,15 +374,24 @@ function buildLookupMap(values){
   if(!values || values.length < 2) return new Map();
 
   const hmap = buildHeaderMap(values[0]);
-  mustHaveHeadersLookup(hmap);
+
+  const idxTitle = pickHeader(hmap, ['itemtitle','item title','title','product']);
+  const idxImg   = pickHeader(hmap, ['imageurl','image url','img','beer image url']);
+  const idxLoc   = pickHeader(hmap, ['loccode','loc code','location','bin','aisle']);
+
+  if(idxTitle == null){
+    throw new Error('ImageLookup sheet missing required header: itemTitle');
+  }
 
   const out = new Map();
   for(const row of values.slice(1)){
-    const itemTitle = safe(row[hmap['itemtitle']] ?? '');
+    const itemTitle = safe(row[idxTitle] ?? '');
     if(!itemTitle) continue;
+
     const key = itemKeyByTitle(itemTitle);
-    const imageUrl = safe(row[hmap['imageurl']] ?? '');
-    const locCode  = safe(row[hmap['loccode']] ?? '');
+    const imageUrl = idxImg != null ? safe(row[idxImg] ?? '') : '';
+    const locCode  = idxLoc != null ? safe(row[idxLoc] ?? '') : '';
+
     out.set(key, { imageUrl, locCode, rawTitle: itemTitle });
   }
   return out;
@@ -557,7 +573,6 @@ function setNextCard(item, qtyId, aisleId, imgId){
   im.src = item.imageResolved;
 }
 
-// MAIN QTY BUTTON MODE
 function setQtyMode(mode, numberText){
   const num = $('curQtyNumber');
   const done = $('curQtyDone');
@@ -777,6 +792,7 @@ async function init(){
       qtyPillClick(e);
     }, { passive:false });
 
+    // ✅ Load all 3 sheets (Warehouse Orders + Warehouse ImageLookup + Variety Packs)
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
@@ -787,16 +803,22 @@ async function init(){
     if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
 
     const lookupValues = lookupJson.values || [];
-    if(lookupValues.length < 2) throw new Error('ImageLookup sheet has no data.');
+    if(lookupValues.length < 2) {
+      // Don’t hard-fail: app can still run (no images/locations)
+      console.warn('ImageLookup sheet has no data (continuing).');
+    }
 
     const varietyValues = varietyJson.values || [];
-    if(varietyValues.length < 2) throw new Error(`Variety sheet "${varietySheetName}" has no data.`);
+    if(varietyValues.length >= 2){
+      VARIETY_PACK_MAP = buildVarietyPackMap(varietyValues);
+      console.log('Variety packs loaded:', VARIETY_PACK_MAP.size);
+    }else{
+      VARIETY_PACK_MAP = new Map();
+      console.warn('Variety Packs sheet has no data (continuing without expansion).');
+    }
 
-    // Build maps
-    const lookupMap = buildLookupMap(lookupValues);
-    VARIETY_MAP = buildVarietyMap(varietyValues);
+    const lookupMap = (lookupValues.length >= 2) ? buildLookupMap(lookupValues) : new Map();
 
-    // Parse Orders
     const hmap = buildHeaderMap(ordersValues[0]);
     mustHaveHeadersOrders(hmap);
 
