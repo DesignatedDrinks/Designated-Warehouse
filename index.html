@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <!-- Kiosk-style: reduce zoom + gesture weirdness -->
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no" />
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
-<body>
 
+<body>
   <header class="top">
     <div class="topRow">
       <div class="brand">Designated <span>Warehouse</span></div>
@@ -54,7 +55,7 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- Main qty / DONE Next button -->
+          <!-- MAIN QTY / DONE state (display-only unless DONE triggers next order) -->
           <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
             <div class="qtyNumber" id="curQtyNumber">—</div>
 
@@ -66,19 +67,22 @@
         </div>
 
         <div class="heroPick">
-          <!-- ✅ NON-CLICKABLE CAN IMAGE -->
+          <!-- NON-CLICKABLE IMAGE AREA -->
           <div class="imgWrap heroImg noTap" aria-hidden="true">
             <img id="curImg" alt="Current item image" draggable="false" />
           </div>
 
           <div class="heroSide">
-            <!-- ✅ ONLY THIS BUTTON PICKS -->
-            <button id="btnPickNext" class="btn heroNext secondary" type="button">Next →</button>
+            <!-- ONLY THIS BUTTON PICKS -->
+            <button id="btnPickNext" class="btn heroNext secondary" type="button">
+              Next →
+            </button>
             <div class="heroHint">Tap once per item</div>
           </div>
         </div>
 
         <div class="nextRow">
+          <!-- These DO NOT pick. They only jump the queue forward. -->
           <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n1Qty">—</div>
@@ -132,3 +136,4 @@
   <script src="./script.js"></script>
 </body>
 </html>
+
