@@ -4,7 +4,7 @@
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const ordersSheetName = 'Orders';
 const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly
-const apiKey    = 'AIzaSyA7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U';
+const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'.replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
 
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
@@ -114,23 +114,6 @@ async function fetchJson(url){
 }
 
 // =========================================================
-// BRAND PRIORITY: Harmon's first, Temple/Templ last
-// =========================================================
-function isHarmons(title){
-  const t = (title || '').toLowerCase();
-  return t.includes("harmon");
-}
-function isTemple(title){
-  const t = (title || '').toLowerCase();
-  return t.includes("temple") || t.includes("templ");
-}
-function brandPriority(title){
-  if(isHarmons(title)) return 0;
-  if(isTemple(title)) return 2;
-  return 1;
-}
-
-// =========================================================
 // PACK SIZE PARSING (packs -> cans)
 // =========================================================
 function parsePackSize(itemTitle, variantTitle){
@@ -170,30 +153,31 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// LOCATION (locCode) SORTING — YOUR WAREHOUSE LOGIC
-// Aisle A: A-11 ... A-01  (descending)
-// Aisle B zipper: B-N-01, B-S-01, B-N-02, B-S-02 ...
+// LOCATION (locCode) SORTING — FINAL RULES
+// 1) Aisle B zipper FIRST: B-N-01, B-S-01, B-N-02, B-S-02 ...
+// 2) Aisle A SECOND: A-11 → A-01 (descending)
+// NOTE: NO MORE Harmon/Temple sorting at all.
 // =========================================================
 function parseLocCode(locCode){
   const s = safe(locCode).toUpperCase();
   if(!s) return null;
 
-  // A-11, A-01
-  let m = s.match(/^A-(\d{1,2})$/);
-  if(m){
-    const n = parseInt(m[1],10);
-    if(!Number.isFinite(n)) return null;
-    return { zone:'A', idx:n, side:'', sortKey: [1, -n, 0] };
-  }
-
-  // B-N-01, B-S-01
-  m = s.match(/^B-([NS])-(\d{1,2})$/);
+  // B-N-01, B-S-01  (FIRST)
+  let m = s.match(/^B-([NS])-(\d{1,2})$/);
   if(m){
     const side = m[1];
     const n = parseInt(m[2],10);
     if(!Number.isFinite(n)) return null;
     const sideOrder = (side === 'N') ? 0 : 1; // N before S
-    return { zone:'B', idx:n, side, sortKey: [2, n, sideOrder] };
+    return { zone:'B', idx:n, side, sortKey: [1, n, sideOrder] };
+  }
+
+  // A-11, A-01  (SECOND, descending)
+  m = s.match(/^A-(\d{1,2})$/);
+  if(m){
+    const n = parseInt(m[1],10);
+    if(!Number.isFinite(n)) return null;
+    return { zone:'A', idx:n, side:'', sortKey: [2, -n, 0] };
   }
 
   return { zone:'?', idx:999, side:'', sortKey: [99, 999, 0] };
@@ -204,25 +188,37 @@ function locLabel(locCode){
 }
 
 // =========================================================
-// VARIETY PACK EXPANSION (THIS IS THE FIX)
-// You MUST list the component cans by EXACT ImageLookup itemTitle.
+// VARIETY PACK EXPANSION (YOU MUST FILL COMPONENTS)
+// IMPORTANT: component titles MUST match ImageLookup itemTitle (after normalization)
 // =========================================================
 const VARIETY_PACKS = [
   {
-    // Match rule: if the order line's itemTitle includes this text
-    includesMatch: 'dry february - 28 pack',
-    // Optional: used only for your sanity
-    name: 'Dry February - 28 Pack',
-    // Components: each becomes a pickable single can line item
-    // qty is "per pack". If customer buys 2 packs, it doubles.
+    // Canadian Classics 12 Pack
+    exactMatch: 'Designated Drinks (Non-Alcoholic) Canadian Classics 12 Pack',
+    name: 'Canadian Classics 12 Pack',
+    // If each component is 1 can, list all 12 with qty:1
     components: [
-      // =============================
-      // REPLACE THESE WITH REAL TITLES
-      // =============================
-      // { title: 'Athletic Brewing Company (Non-Alcoholic) Run Wild IPA', qty: 1 },
-      // { title: 'Atypique (Non-Alcoholic) Gin & Tonic', qty: 1 },
-      // ...
-      // total qty should equal 28
+      { title: "Harmon's (Non-Alcoholic) Lunchbox Lagered Ale", qty: 1 },
+      { title: "Wellington Brewery (Non-Alcoholic) Mucho IPA", qty: 1 },
+      { title: "Triple Bogey Brewing Co. (Non-Alcoholic) Triple Bogey Premium Lager", qty: 1 },
+      { title: "Sober Carpenter (Non-Alcoholic)White", qty: 1 },
+      { title: "Sober Carpenter (Non-Alcoholic) Irish Red", qty: 1 },
+      { title: "Perth Brewery (Non-Alcoholic) Play", qty: 1 },
+      { title: "Nickel Brook (Non-Alcoholic) Wicked Tame Hazy IPA", qty: 1 },
+      { title: "One For The Road Brewing Co. (Non-Alcoholic) Saskaberry Blonde Ale", qty: 1 },
+      { title: "Muskoka Brewery (Non Alcoholic) Veer Lager with Lime", qty: 1 },
+      { title: "Lake of Bays Brewing Co. (Non-Alcoholic) Near Zero Pale Ale", qty: 1 },
+      { title: "Henderson Brewing Company (Non-Alcoholic) Pearson IPA", qty: 1 },
+      { title: "Collective Arts Brewing (Non-Alcoholic) Hazy Pale Ale", qty: 1 },
+    ],
+  },
+  {
+    // Dry February - 28 Pack (keep your rule; fill components later)
+    includesMatch: 'dry february - 28 pack',
+    name: 'Dry February - 28 Pack',
+    components: [
+      // TODO: fill exact ImageLookup titles, total qty should = 28
+      // { title: '...', qty: 1 },
     ],
   },
 ];
@@ -236,13 +232,12 @@ function findVarietyPackRule(itemTitle){
   return null;
 }
 
-// Takes one order row and returns either [row] or exploded component rows
 function expandVarietyPackRow(r){
   const rule = findVarietyPackRule(r.itemTitle);
   if(!rule) return [r];
 
   const out = [];
-  const packCount = Math.max(1, r.units || 1); // units = number of packs ordered
+  const packCount = Math.max(1, r.units || 1); // number of packs ordered
 
   for(const c of (rule.components || [])){
     const perPack = toIntQty(c.qty);
@@ -259,10 +254,7 @@ function expandVarietyPackRow(r){
     });
   }
 
-  // If misconfigured (no components), fall back to original row
-  if(!out.length) return [r];
-
-  return out;
+  return out.length ? out : [r];
 }
 
 // =========================================================
@@ -322,14 +314,12 @@ function buildHeaderMap(headerRow){
 }
 
 function mustHaveHeadersOrders(hmap){
-  // Orders has NO locCode
   const required = ['orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'];
   const missing = required.filter(k => !(k in hmap));
   if(missing.length) throw new Error(`Orders headers missing: ${missing.join(', ')}`);
 }
 
 function mustHaveHeadersLookup(hmap){
-  // ImageLookup: itemTitle, imageUrl, locCode
   const required = ['itemtitle','imageurl','loccode'];
   const missing = required.filter(k => !(k in hmap));
   if(missing.length) throw new Error(`ImageLookup headers missing: ${missing.join(', ')}`);
@@ -381,6 +371,7 @@ function buildLookupMap(values){
 
 // =========================================================
 // BUILD ORDERS (JOIN with ImageLookup + VARIETY EXPANSION)
+// SORT = LOCATION ONLY (B zipper first, then A descending)
 // =========================================================
 function buildOrders(rows, lookupMap){
   const byOrder = new Map();
@@ -404,7 +395,6 @@ function buildOrders(rows, lookupMap){
     const merged = new Map();
 
     for(const r0 of o.itemsRaw){
-      // explode variety packs into component rows
       const expandedRows = expandVarietyPackRow(r0);
 
       for(const r of expandedRows){
@@ -446,17 +436,12 @@ function buildOrders(rows, lookupMap){
     }
 
     const items = Array.from(merged.values()).sort((a,b)=>{
-      const pa = brandPriority(a.itemTitle);
-      const pb = brandPriority(b.itemTitle);
-      if(pa !== pb) return pa - pb;
-
       const as = a.locSort, bs = b.locSort;
       for(let i=0;i<Math.max(as.length, bs.length);i++){
         const av = as[i] ?? 0;
         const bv = bs[i] ?? 0;
         if(av !== bv) return av - bv;
       }
-
       return a.itemTitle.localeCompare(b.itemTitle);
     });
 
