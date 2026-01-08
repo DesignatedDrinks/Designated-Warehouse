@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <!-- Kiosk-style: reduce zoom + gesture weirdness -->
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no" />
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no" />
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
@@ -26,15 +26,22 @@
           <div id="addrLine" class="addrLine">—</div>
         </div>
 
-        <div class="chips">
-          <div class="chip" id="chipOrder">#—</div>
-          <div class="chip" id="chipBoxes">Boxes: —</div>
-          <div class="chip" id="chipProgress">0%</div>
+        <div class="totalCansWrap">
+          <div class="totalCansLabel">TOTAL CANS</div>
+          <div class="totalCansValue" id="totalCans">—</div>
         </div>
       </div>
 
+      <div class="chips">
+        <div class="chip" id="chipOrder">#—</div>
+        <div class="chip" id="chipBoxes">Boxes: —</div>
+        <div class="chip mutedChip" id="chipProgress">0%</div>
+      </div>
+
       <div class="progressWrap">
-        <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
+        <div class="progressBar">
+          <div id="progressFill" class="progressFill"></div>
+        </div>
         <div class="progressMeta">
           <div id="progressLeft">0 picked</div>
           <div id="progressRight">0 total</div>
@@ -55,9 +62,11 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- MAIN QTY / DONE state (display-only unless DONE triggers next order) -->
-          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
+          <!-- Qty button is DISPLAY only when not done.
+               When order done, it becomes NEXT ORDER action (JS handles). -->
+          <button class="qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
             <div class="qtyNumber" id="curQtyNumber">—</div>
+            <div class="qtyUnit">CANS</div>
 
             <div class="qtyDone" id="curQtyDone" style="display:none;">
               <div class="qtyCheck">✔</div>
@@ -67,22 +76,20 @@
         </div>
 
         <div class="heroPick">
-          <!-- NON-CLICKABLE IMAGE AREA -->
-          <div class="imgWrap heroImg noTap" aria-hidden="true">
+          <div class="imgWrap noTap" aria-hidden="true">
             <img id="curImg" alt="Current item image" draggable="false" />
           </div>
 
           <div class="heroSide">
-            <!-- ONLY THIS BUTTON PICKS -->
+            <!-- ✅ THE ONLY PICK BUTTON -->
             <button id="btnPickNext" class="btn heroNext secondary" type="button">
-              Next →
+              PICK ITEM →
             </button>
-            <div class="heroHint">Tap once per item</div>
+            <div class="heroHint">Only tap the PICK button</div>
           </div>
         </div>
 
         <div class="nextRow">
-          <!-- These DO NOT pick. They only jump the queue forward. -->
           <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n1Qty">—</div>
@@ -115,7 +122,7 @@
       <div class="listWrap">
         <div class="listHeader">
           <div class="listTitle">Order list</div>
-          <div class="listHint">Tap a row to jump (optional)</div>
+          <div class="listHint">Tap a row to jump</div>
         </div>
 
         <div id="listBody" class="listBody"></div>
@@ -136,4 +143,3 @@
   <script src="./script.js"></script>
 </body>
 </html>
-
