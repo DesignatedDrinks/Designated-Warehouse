@@ -197,23 +197,47 @@ function locLabel(locCode){
 
 // =========================================================
 // VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
+// - bulletproof matching (full title + stripped vendor prefix)
+// - respects QtyPerPackItem (x2 etc)
 // =========================================================
+function stripBrandPrefix(s){
+  return normalizeText(s)
+    .replace(/^designated drinks non alcoholic\s+/,'')
+    .replace(/^designated drinks\s+/,'')
+    .trim();
+}
+
+function allPackMatchKeys(packTitle){
+  const full = normalizeText(packTitle);
+  const stripped = stripBrandPrefix(packTitle);
+  const keys = new Set([full, stripped]);
+
+  keys.add(full.replace(/\bnon alcoholic\b/g,'').replace(/\s+/g,' ').trim());
+  keys.add(stripped.replace(/\bnon alcoholic\b/g,'').replace(/\s+/g,' ').trim());
+
+  return Array.from(keys).filter(Boolean);
+}
+
 function buildVarietyPackMap(values){
-  // values = [headerRow, ...rows]
   const out = new Map();
   if(!values || values.length < 2) return out;
 
   const hmap = buildHeaderMap(values[0]);
 
-  // tolerant header aliases
-  const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
-  const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
-  const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
-  // image url column exists but not required for expansion
-  // const colImg  = pickHeader(hmap, ['beer image url','beerimageurl','image url','imageurl','img']);
+  const colPack = pickHeader(hmap, [
+    'variety pack name','varietypackname','pack name','pack','variety pack'
+  ]);
+
+  const colBeer = pickHeader(hmap, [
+    'beer name','beername','item','title','product','component','component title'
+  ]);
+
+  const colQty  = pickHeader(hmap, [
+    'qtyperpackitem','qty per pack item','qty per pack','per pack qty','qty','quantity','perpack'
+  ]);
 
   if(colPack == null || colBeer == null){
-    // Don't hard-fail — just return empty and let the app run without expansion.
+    // Don’t hard-fail: app runs without expansion
     return out;
   }
 
@@ -222,28 +246,46 @@ function buildVarietyPackMap(values){
     const beerTitle = safe(row[colBeer] ?? '');
     if(!packTitle || !beerTitle) continue;
 
-    const qty = (colQty != null) ? Math.max(1, toIntQty(row[colQty] ?? 1)) : 1;
+    let qtyRaw = (colQty != null) ? row[colQty] : 1;
+    let qty = toIntQty(qtyRaw);
+    if(!Number.isFinite(qty) || qty <= 0) qty = 1;
 
-    const key = normalizeText(packTitle);
-    if(!out.has(key)) out.set(key, { packTitle, components: [] });
-
-    out.get(key).components.push({ title: beerTitle, qty });
+    for(const key of allPackMatchKeys(packTitle)){
+      if(!out.has(key)) out.set(key, { packTitle, components: [] });
+      out.get(key).components.push({ title: beerTitle, qty });
+    }
   }
 
   return out;
 }
 
 function findVarietyPackRule(itemTitle){
-  const key = normalizeText(itemTitle);
-  return VARIETY_PACK_MAP.get(key) || null;
+  const fullKey = normalizeText(itemTitle);
+  const strippedKey = stripBrandPrefix(itemTitle);
+
+  if(VARIETY_PACK_MAP.has(fullKey)) return VARIETY_PACK_MAP.get(fullKey);
+  if(VARIETY_PACK_MAP.has(strippedKey)) return VARIETY_PACK_MAP.get(strippedKey);
+
+  // last resort: contains match
+  for(const [k, rule] of VARIETY_PACK_MAP.entries()){
+    if(!k) continue;
+    if(fullKey.includes(k) || k.includes(fullKey)) return rule;
+    if(strippedKey.includes(k) || k.includes(strippedKey)) return rule;
+  }
+
+  return null;
 }
 
 function expandVarietyPackRow(r){
   const rule = findVarietyPackRule(r.itemTitle);
   if(!rule) return [r];
 
+  // packs ordered should be line qty, not cans.
+  // If someone has qty=31 for a "31 pack", treat as 1 pack.
+  let packCount = Math.max(1, r.units || 1);
+  if(r.packSize >= 10 && packCount === r.packSize) packCount = 1;
+
   const out = [];
-  const packCount = Math.max(1, r.units || 1); // number of packs ordered
 
   for(const c of (rule.components || [])){
     const perPack = Math.max(1, toIntQty(c.qty));
@@ -328,7 +370,6 @@ function pickHeader(hmap, candidates){
 }
 
 function mustHaveHeadersOrders(hmap){
-  // Minimum viable to run
   const req = ['orderid','itemtitle','qty'];
   const missing = req.filter(k => !(k in hmap));
   if(missing.length) throw new Error(`Orders sheet missing required headers: ${missing.join(', ')}`);
@@ -632,7 +673,7 @@ function renderCurrent(){
 
   $('curSub').innerHTML =
     `<span class="badge">${escapeHtml(locText)}</span>` +
-    (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
+    (srcText ? `<span class="badge">${escapeHtml(srcText))}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
 
@@ -804,7 +845,6 @@ async function init(){
 
     const lookupValues = lookupJson.values || [];
     if(lookupValues.length < 2) {
-      // Don’t hard-fail: app can still run (no images/locations)
       console.warn('ImageLookup sheet has no data (continuing).');
     }
 
