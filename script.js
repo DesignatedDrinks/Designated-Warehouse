@@ -1,15 +1,15 @@
 // =========================================================
 // CONFIG
 // =========================================================
-const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g'; // ✅ Designated Warehouse file
 const ordersSheetName = 'Orders';
-const lookupSheetName = 'ImageLookup';
+const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly (Designated Warehouse file)
 
-const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
-const varietySheetName = 'Variety Packs';
+const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us'; // ✅ Variety Packs file
+const varietySheetName = 'Variety Packs'; // MUST match tab name exactly (Variety Packs file)
 
-const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
-  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7');
+const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
+  .replace('AIzaSyA7sSHMaY7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
 
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
@@ -31,51 +31,39 @@ let queueIndex = 0;
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v1';
 
-// Built at runtime from Variety Packs sheet
-let VARIETY_PACK_MAP = new Map();
+// ✅ Built at runtime from Variety Packs sheet
+let VARIETY_PACK_MAP = new Map(); // key(normalized pack title) => { packTitle, components:[{title, qty}] }
 
 // =========================================================
-// TAP CONTROL (THIS FIXES YOUR PROBLEM)
+// TAP SAFETY (THIS IS THE BIG FIX)
 // =========================================================
-let TAP_LOCKED = false;
-let LAST_TAP_TS = 0;
+// Hard lockout so double taps / ghost taps can't double-pick.
+let PICK_LOCK_UNTIL = 0;
+const PICK_LOCK_MS = 550;
 
-function withTapLock(fn){
-  const now = Date.now();
-  // block double fire (pointerdown + click) + rapid double taps
-  if (TAP_LOCKED) return;
-  if (now - LAST_TAP_TS < 350) return;
+function nowMs(){ return Date.now(); }
+function pickLocked(){ return nowMs() < PICK_LOCK_UNTIL; }
+function lockPick(){ PICK_LOCK_UNTIL = nowMs() + PICK_LOCK_MS; }
 
-  TAP_LOCKED = true;
-  LAST_TAP_TS = now;
-
-  try { fn(); }
-  finally {
-    // short lock window
-    setTimeout(()=>{ TAP_LOCKED = false; }, 220);
-  }
+function stopTap(e){
+  if(!e) return;
+  try { e.preventDefault(); } catch {}
+  try { e.stopPropagation(); } catch {}
 }
 
-// “Safe tap”: only fires once and prevents browser ghost clicks.
+// Safe bind for buttons: pointerdown only, never "click".
+// (click is where ghost taps and delayed mobile clicks bite you)
 function bindSafeTap(el, handler){
   if(!el) return;
-
   el.addEventListener('pointerdown', (e)=>{
-    // only primary pointer
-    if(e.pointerType === 'mouse' && e.button !== 0) return;
-    try { e.preventDefault(); } catch {}
-    try { e.stopPropagation(); } catch {}
-
-    withTapLock(()=>handler(e));
-  }, { passive:false });
-
-  // kill click fallback/ghost
-  el.addEventListener('click', (e)=>{
-    try { e.preventDefault(); } catch {}
-    try { e.stopPropagation(); } catch {}
+    stopTap(e);
+    handler(e);
   }, { passive:false });
 }
 
+// =========================================================
+// UTILS
+// =========================================================
 function safe(v){ return (v ?? '').toString().trim(); }
 
 function setError(msg){
@@ -194,7 +182,9 @@ function formatSourceBreakdown(sources){
 }
 
 // =========================================================
-// LOCATION SORTING
+// LOCATION (locCode) SORTING
+// 1) Aisle B zipper FIRST: B-N-01, B-S-01, B-N-02, B-S-02 ...
+// 2) Aisle A SECOND: A-11 → A-01 (descending)
 // =========================================================
 function parseLocCode(locCode){
   const s = safe(locCode).toUpperCase();
@@ -224,7 +214,7 @@ function locLabel(locCode){
 }
 
 // =========================================================
-// PARSE SHEET HELPERS
+// PARSE SHEET HELPERS (TOLERANT)
 // =========================================================
 function buildHeaderMap(headerRow){
   const map = {};
@@ -247,13 +237,16 @@ function mustHaveHeadersOrders(hmap){
 }
 
 // =========================================================
-// VARIETY PACK EXPANSION
+// VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
+// - Reads QtyPerPackItem
+// - Robust title matching
 // =========================================================
 function stripVendorPrefix(title){
   const t = safe(title);
   const m = t.match(/^\s*.*?\)\s*(.+)$/);
   return m ? safe(m[1]) : t;
 }
+
 function normalizePackTitle(title){
   let t = safe(title);
   t = stripVendorPrefix(t);
@@ -262,11 +255,13 @@ function normalizePackTitle(title){
   t = t.replace(/\s*-\s*\d+\s*pack\b\s*$/i, '');
   return normalizeText(t);
 }
+
 function buildVarietyPackMap(values){
   const out = new Map();
   if(!values || values.length < 2) return out;
 
   const hmap = buildHeaderMap(values[0]);
+
   const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
   const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
   const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
@@ -298,9 +293,11 @@ function buildVarietyPackMap(values){
 
   return out;
 }
+
 function findVarietyPackRule(itemTitle){
   return VARIETY_PACK_MAP.get(normalizePackTitle(itemTitle)) || null;
 }
+
 function expandVarietyPackRow(r){
   const rule = findVarietyPackRule(r.itemTitle);
   if(!rule) return [r];
@@ -369,6 +366,7 @@ function buildLookupMap(values){
   if(!values || values.length < 2) return new Map();
 
   const hmap = buildHeaderMap(values[0]);
+
   const idxTitle = pickHeader(hmap, ['itemtitle','item title','title','product']);
   const idxImg   = pickHeader(hmap, ['imageurl','image url','img','beer image url']);
   const idxLoc   = pickHeader(hmap, ['loccode','loc code','location','bin','aisle']);
@@ -439,7 +437,8 @@ function boxLabel(totalCans){
 }
 
 // =========================================================
-// BUILD ORDERS
+// BUILD ORDERS (JOIN with ImageLookup + VARIETY EXPANSION)
+// SORT = LOCATION ONLY
 // =========================================================
 function buildOrders(rows, lookupMap){
   const byOrder = new Map();
@@ -474,6 +473,7 @@ function buildOrders(rows, lookupMap){
 
         if(!merged.has(k)){
           const loc = lu?.locCode ? parseLocCode(lu.locCode) : null;
+
           const imgCandidate = lu?.imageUrl || r.imageUrl;
           const imgResolved = resolveImage(imgCandidate, r.itemTitle);
 
@@ -481,8 +481,10 @@ function buildOrders(rows, lookupMap){
             key: k,
             itemTitle: r.itemTitle,
             qtyCans: 0,
+
             locCode: lu?.locCode || '',
             locSort: loc?.sortKey || [99,999,0],
+
             imageResolved: imgResolved,
             sources: []
           });
@@ -559,9 +561,9 @@ function setOrderBar(){
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
-  // 🔴 total cans big number
-  const totalCansEl = $('totalCans');
-  if(totalCansEl) totalCansEl.textContent = `${total}`;
+  // ✅ NEW BIG TOTAL CANS FIELD
+  const totalEl = $('totalCans');
+  if(totalEl) totalEl.textContent = `${total}`;
 
   $('progressFill').style.width = `${pct}%`;
   $('progressLeft').textContent = `${picked} picked`;
@@ -590,13 +592,13 @@ function renderList(){
     `;
   }).join('');
 
-  // IMPORTANT: list rows ONLY jump, never pick.
+  // ✅ list rows can still jump (optional), but do NOT pick.
   body.querySelectorAll('.listRow').forEach(row=>{
-    bindSafeTap(row, ()=>{
+    row.addEventListener('click', ()=>{
       const k = row.getAttribute('data-key');
       const pos = queue.findIndex(q => q.key === k);
       if(pos >= 0){ queueIndex = pos; renderAll(); }
-    });
+    }, { passive:true });
   });
 }
 
@@ -619,7 +621,6 @@ function setQtyMode(mode, numberText){
   const num = $('curQtyNumber');
   const done = $('curQtyDone');
   const unit = document.querySelector('.qtyUnit');
-
   if(!num || !done) return;
 
   if(mode === 'done'){
@@ -636,10 +637,10 @@ function setQtyMode(mode, numberText){
 
 function renderCurrent(){
   const o = currentOrder();
-  const pickBtn = $('btnPickNext');
+  const nextPickBtn = $('btnPickNext');
 
   if(!o){
-    if(pickBtn) pickBtn.style.visibility = 'visible';
+    if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
     $('curTitle').textContent = 'No orders found';
     $('curSub').textContent = '';
     setQtyMode('qty', '—');
@@ -656,17 +657,20 @@ function renderCurrent(){
   const cur = queue[queueIndex];
 
   if(!cur){
-    if(pickBtn) pickBtn.style.visibility = 'hidden';
+    if(nextPickBtn) nextPickBtn.style.visibility = 'hidden';
+
     $('curTitle').textContent = 'ORDER PICKED';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curImg').src = './done.svg';
+
     setQtyMode('done');
+
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
     return;
   }
 
-  if(pickBtn) pickBtn.style.visibility = 'visible';
+  if(nextPickBtn) nextPickBtn.style.visibility = 'visible';
 
   $('curTitle').textContent = cur.itemTitle;
 
@@ -693,8 +697,13 @@ function renderAll(){
 // ACTIONS
 // =========================================================
 function pickCurrent(){
+  // ✅ HARD GATE: stops double taps, ghost taps, and spam.
+  if(pickLocked()) return;
+  lockPick();
+
   const o = currentOrder();
   if(!o) return;
+
   rebuildQueue();
   const cur = queue[queueIndex];
   if(!cur) return;
@@ -729,15 +738,6 @@ function undoLast(){
   }
 
   renderAll();
-}
-
-function jumpNext(offset){
-  rebuildQueue();
-  const target = queueIndex + offset;
-  if(target >= 0 && target <= queue.length - 1){
-    queueIndex = target;
-    renderAll();
-  }
 }
 
 function prevOrder(){
@@ -775,14 +775,21 @@ function resetThisOrder(){
   queueIndex = 0;
 
   renderAll();
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
 }
 
-function qtyPillClick(){
+// Qty pill click: ONLY advances order when DONE.
+function qtyPillClick(e){
+  stopTap(e);
+
   const o = currentOrder();
   if(!o) return;
+
   rebuildQueue();
   const done = (queue.length === 0);
-  if(done) nextOrder();
+  if(!done) return;
+
+  nextOrder();
 }
 
 // =========================================================
@@ -790,24 +797,23 @@ function qtyPillClick(){
 // =========================================================
 async function init(){
   try{
-    // Bind safe taps (NO global pick area)
+    // ✅ Only bind taps to actual buttons.
     bindSafeTap($('btnSkip'), skipCurrent);
     bindSafeTap($('btnUndo'), undoLast);
     bindSafeTap($('btnPrevOrder'), prevOrder);
     bindSafeTap($('btnNextOrder'), nextOrder);
     bindSafeTap($('btnResetOrder'), resetThisOrder);
 
-    // ✅ ONLY PICK BUTTON can pick
+    // ✅ ONLY PICK BUTTON PICKS.
     bindSafeTap($('btnPickNext'), pickCurrent);
 
-    // Next preview buttons ONLY jump
-    bindSafeTap($('next1'), ()=>jumpNext(1));
-    bindSafeTap($('next2'), ()=>jumpNext(2));
-
-    // Qty pill ONLY advances to next order when done
+    // ✅ Qty pill only does "Next order" when done.
     bindSafeTap($('curQty'), qtyPillClick);
 
-    // Load all 3 sheets
+    // ❌ IMPORTANT: DO NOT bind anything to preview cards (next1/next2) or tapPickArea.
+    // If those existed before, they are the reason “any tap advances”.
+
+    // ✅ Load all 3 sheets
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
@@ -818,8 +824,11 @@ async function init(){
     if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
 
     const lookupValues = lookupJson.values || [];
-    const varietyValues = varietyJson.values || [];
+    if(lookupValues.length < 2) {
+      console.warn('ImageLookup sheet has no data (continuing).');
+    }
 
+    const varietyValues = varietyJson.values || [];
     if(varietyValues.length >= 2){
       VARIETY_PACK_MAP = buildVarietyPackMap(varietyValues);
       console.log('Variety packs loaded:', VARIETY_PACK_MAP.size);
@@ -834,6 +843,7 @@ async function init(){
     mustHaveHeadersOrders(hmap);
 
     const rows = ordersValues.slice(1).map(r => rowToOrderObj(r, hmap)).filter(Boolean);
+
     orders = buildOrders(rows, lookupMap);
 
     if(!orders.length){
