@@ -1,4 +1,3 @@
-// script.js
 // =========================================================
 // CONFIG
 // =========================================================
@@ -14,15 +13,16 @@ const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
 
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
-
 const lookupUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(lookupSheetName)}?alt=json&key=${apiKey}`;
-
 const varietyUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${varietySheetId}/values/${encodeURIComponent(varietySheetName)}?alt=json&key=${apiKey}`;
 
 const $ = (id) => document.getElementById(id);
 
+// =========================================================
+// STATE
+// =========================================================
 let orders = [];
 let orderIndex = 0;
 
@@ -30,24 +30,62 @@ let queue = [];
 let queueIndex = 0;
 
 let undoStack = [];
-const STORAGE_KEY = 'dw_picked_queue_v1';
+const STORAGE_KEY = 'dw_picked_queue_v2';
 
+// Runtime built
 let VARIETY_PACK_MAP = new Map();
 
-// ✅ tap lock (prevents double pick from rapid/ghost taps)
-let PICK_LOCKED = false;
-let LAST_PICK_TS = 0;
-const PICK_LOCK_MS = 350;
+// =========================================================
+// BATTERY OPT: Picked cache + debounced storage writes
+// =========================================================
+let pickedCache = null;
+let saveTimer = null;
+
+function loadPickedOnce(){
+  if(pickedCache) return pickedCache;
+  try { pickedCache = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { pickedCache = {}; }
+  return pickedCache;
+}
+
+function scheduleSavePicked(){
+  if(saveTimer) clearTimeout(saveTimer);
+  // Debounce writes — big battery win on tablets
+  saveTimer = setTimeout(()=>{
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pickedCache || {})); } catch {}
+    saveTimer = null;
+  }, 250);
+}
+
+function isPicked(orderId, key){
+  const p = loadPickedOnce();
+  return !!(p[orderId] && p[orderId][key]);
+}
+
+function setPicked(orderId, key, val){
+  const p = loadPickedOnce();
+  if(!p[orderId]) p[orderId] = {};
+  p[orderId][key] = !!val;
+  scheduleSavePicked();
+}
+
+// =========================================================
+// RENDER BATCHING (prevents double render per tap)
+// =========================================================
+let renderPending = false;
+function requestRender(){
+  if(renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(()=>{
+    renderPending = false;
+    renderAllNow();
+  });
+}
 
 // =========================================================
 // UTILS
 // =========================================================
 function safe(v){ return (v ?? '').toString().trim(); }
-
-function canLabel(n){
-  const x = Math.abs(parseInt(n, 10) || 0);
-  return x === 1 ? 'can' : 'cans';
-}
 
 function setError(msg){
   const box = $('errBox');
@@ -78,6 +116,18 @@ function escapeHtml(str){
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'","&#039;");
+}
+
+function cansLabel(n){
+  const num = Math.max(0, n|0);
+  return `${num} ${num === 1 ? 'can' : 'cans'}`;
+}
+
+// Kill accidental double-tap / zoom / ghost clicks
+function killTap(e){
+  if(!e) return;
+  try { e.preventDefault(); } catch {}
+  try { e.stopPropagation(); } catch {}
 }
 
 function formatCustomerNameHTML(full){
@@ -116,21 +166,18 @@ function resolveImage(url, title){
 }
 
 async function fetchJson(url){
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });
   const text = await res.text();
-  if(!res.ok){
-    throw new Error(`Fetch failed: ${res.status}\n${text}`);
-  }
+  if(!res.ok) throw new Error(`Fetch failed: ${res.status}\n${text}`);
   try { return JSON.parse(text); }
   catch { throw new Error(`Invalid JSON from Sheets API:\n${text.slice(0,500)}`); }
 }
 
 // =========================================================
-// PACK SIZE PARSING
+// PACK SIZE PARSING (packs -> cans)
 // =========================================================
 function parsePackSize(itemTitle, variantTitle){
   const s = `${safe(itemTitle)} ${safe(variantTitle)}`.toLowerCase();
-
   if(/\bsingle\b/.test(s) || /\bcan\b/.test(s) || /\b1 pack\b/.test(s)) return 1;
 
   const m1 = s.match(/(\d+)\s*[- ]?\s*(pack|pk)\b/);
@@ -147,11 +194,13 @@ function parsePackSize(itemTitle, variantTitle){
 
   return 1;
 }
+
 function clampPack(n){
   if(!Number.isFinite(n) || n <= 0) return 1;
   if(n > 60) return 1;
   return n;
 }
+
 function formatSourceBreakdown(sources){
   const map = new Map();
   for(const src of sources){
@@ -189,6 +238,7 @@ function parseLocCode(locCode){
 
   return { zone:'?', idx:999, side:'', sortKey: [99, 999, 0] };
 }
+
 function locLabel(locCode){
   const s = safe(locCode);
   return s || '—';
@@ -244,10 +294,7 @@ function buildVarietyPackMap(values){
   const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
   const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
 
-  if(colPack == null || colBeer == null){
-    console.warn('Variety Packs: required headers not found. No expansion will occur.');
-    return out;
-  }
+  if(colPack == null || colBeer == null) return out;
 
   for(const row of values.slice(1)){
     const packTitleRaw = safe(row[colPack] ?? '');
@@ -346,9 +393,7 @@ function buildLookupMap(values){
   const idxImg   = pickHeader(hmap, ['imageurl','image url','img','beer image url']);
   const idxLoc   = pickHeader(hmap, ['loccode','loc code','location','bin','aisle']);
 
-  if(idxTitle == null){
-    throw new Error('ImageLookup sheet missing required header: itemTitle');
-  }
+  if(idxTitle == null) throw new Error('ImageLookup sheet missing required header: itemTitle');
 
   const out = new Map();
   for(const row of values.slice(1)){
@@ -358,29 +403,9 @@ function buildLookupMap(values){
     const key = itemKeyByTitle(itemTitle);
     const imageUrl = idxImg != null ? safe(row[idxImg] ?? '') : '';
     const locCode  = idxLoc != null ? safe(row[idxLoc] ?? '') : '';
-
     out.set(key, { imageUrl, locCode, rawTitle: itemTitle });
   }
   return out;
-}
-
-// =========================================================
-// PICKED STATE (LOCAL)
-// =========================================================
-function loadPicked(){
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-  catch { return {}; }
-}
-function savePicked(obj){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
-function isPicked(orderId, key){
-  const p = loadPicked();
-  return !!(p[orderId] && p[orderId][key]);
-}
-function setPicked(orderId, key, val){
-  const p = loadPicked();
-  if(!p[orderId]) p[orderId] = {};
-  p[orderId][key] = !!val;
-  savePicked(p);
 }
 
 // =========================================================
@@ -394,13 +419,13 @@ function boxBreakdown(totalCans){
   n = n % 24;
 
   if(n === 0) return out;
-
   if(n <= 6){ out.b6 = 1; return out; }
   if(n <= 12){ out.b12 = 1; return out; }
 
   out.b24 += 1;
   return out;
 }
+
 function boxLabel(totalCans){
   const b = boxBreakdown(totalCans);
   const parts = [];
@@ -447,7 +472,6 @@ function buildOrders(rows, lookupMap){
 
         if(!merged.has(k)){
           const loc = lu?.locCode ? parseLocCode(lu.locCode) : null;
-
           const imgCandidate = lu?.imageUrl || r.imageUrl;
           const imgResolved = resolveImage(imgCandidate, r.itemTitle);
 
@@ -463,8 +487,8 @@ function buildOrders(rows, lookupMap){
         }
 
         const item = merged.get(k);
-
         const candidate = (lookupMap.get(k)?.imageUrl || r.imageUrl || '');
+
         if(item.imageResolved.startsWith('data:image') && safe(candidate).startsWith('http')){
           item.imageResolved = candidate;
         }
@@ -498,9 +522,12 @@ function buildOrders(rows, lookupMap){
 }
 
 // =========================================================
-// QUEUE + RENDER
+// QUEUE + RENDER (LIST BUILDS ONLY ON ORDER CHANGE)
 // =========================================================
 function currentOrder(){ return orders[orderIndex]; }
+
+let listBuiltForOrderId = null;
+const listRowElsByKey = new Map();
 
 function rebuildQueue(){
   const o = currentOrder();
@@ -529,28 +556,28 @@ function setOrderBar(){
 
   $('whoLine').innerHTML = `${formatCustomerNameHTML(o.customerName)} · ${escapeHtml(cityProvince(o.address))}`;
   $('addrLine').textContent = safe(o.address) || '—';
+
   $('chipOrder').textContent = `#${o.orderId}`;
+  $('chipTotalCans').textContent = `Total: ${cansLabel(total)}`;
   $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
   $('chipProgress').textContent = `${pct}%`;
 
-  // ✅ BIG totals
-  $('bigPicked').textContent = `${picked}`;
-  $('bigPickedUnit').textContent = canLabel(picked);
-  $('bigTotal').textContent = `${total}`;
-  $('bigTotalUnit').textContent = canLabel(total);
-
-  // ✅ also update small progress line (now bigger in CSS)
   $('progressFill').style.width = `${pct}%`;
-  $('progressLeft').textContent = `${picked} ${canLabel(picked)} picked`;
-  $('progressRight').textContent = `${total} ${canLabel(total)} total`;
+  $('progressRight').textContent = `Total: ${cansLabel(total)}`;
 }
 
-function renderList(){
+// Build list ONCE per order, then only update classes
+function buildListIfNeeded(){
   const o = currentOrder();
   const body = $('listBody');
   if(!body) return;
 
-  if(!o){ body.innerHTML=''; return; }
+  if(!o){ body.innerHTML=''; listBuiltForOrderId=null; listRowElsByKey.clear(); return; }
+
+  if(listBuiltForOrderId === o.orderId) return;
+
+  listBuiltForOrderId = o.orderId;
+  listRowElsByKey.clear();
 
   body.innerHTML = o.items.map((it)=>{
     const done = isPicked(o.orderId, it.key);
@@ -567,14 +594,22 @@ function renderList(){
     `;
   }).join('');
 
-  // ✅ list click does NOT pick. It only jumps.
   body.querySelectorAll('.listRow').forEach(row=>{
-    row.addEventListener('click', ()=>{
-      const k = row.getAttribute('data-key');
-      const pos = queue.findIndex(q => q.key === k);
-      if(pos >= 0){ queueIndex = pos; renderAll(); }
-    });
+    const k = row.getAttribute('data-key');
+    if(k) listRowElsByKey.set(k, row);
+
+    // IMPORTANT: view-only list (no jumping). Prevent taps from doing anything.
+    row.addEventListener('pointerdown', (e)=>killTap(e), { passive:false });
+    row.addEventListener('click', (e)=>{ e.preventDefault(); }, { passive:false });
   });
+}
+
+function updateListDoneState(key){
+  const o = currentOrder();
+  if(!o) return;
+  const row = listRowElsByKey.get(key);
+  if(!row) return;
+  row.classList.toggle('done', isPicked(o.orderId, key));
 }
 
 function setNextCard(item, qtyId, aisleId, imgId){
@@ -584,32 +619,35 @@ function setNextCard(item, qtyId, aisleId, imgId){
   if(!item){
     q.textContent = '—';
     a.textContent = '—';
-    im.src = placeholderSvg('—');
+    if(im.dataset.src !== 'placeholder'){
+      im.src = placeholderSvg('—');
+      im.dataset.src = 'placeholder';
+    }
     return;
   }
-  q.textContent = `${item.qtyCans}`;
+
+  q.textContent = cansLabel(item.qtyCans);
   a.textContent = item.locCode ? locLabel(item.locCode) : '—';
-  im.src = item.imageResolved;
+
+  const nextSrc = item.imageResolved;
+  if(im.dataset.src !== nextSrc){
+    im.src = nextSrc;
+    im.dataset.src = nextSrc;
+  }
 }
 
 function setQtyMode(mode, numberText){
   const num = $('curQtyNumber');
-  const unit = $('curQtyUnit');
   const done = $('curQtyDone');
-  if(!num || !done || !unit) return;
+  if(!num || !done) return;
 
   if(mode === 'done'){
     num.style.display = 'none';
-    unit.style.display = 'none';
     done.style.display = 'grid';
   }else{
     done.style.display = 'none';
     num.style.display = 'block';
-    unit.style.display = 'block';
     num.textContent = numberText ?? '—';
-
-    const n = parseInt(numberText, 10);
-    unit.textContent = canLabel(n);
   }
 }
 
@@ -630,7 +668,7 @@ function renderCurrent(){
 
   rebuildQueue();
   setOrderBar();
-  renderList();
+  buildListIfNeeded();
 
   const cur = queue[queueIndex];
 
@@ -642,6 +680,7 @@ function renderCurrent(){
     $('curImg').src = './done.svg';
 
     setQtyMode('done');
+
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
     return;
@@ -659,26 +698,38 @@ function renderCurrent(){
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
-  $('curImg').src = cur.imageResolved;
+
+  // Battery opt: don’t reset src if identical
+  const imgEl = $('curImg');
+  if(imgEl && imgEl.dataset.src !== cur.imageResolved){
+    imgEl.src = cur.imageResolved;
+    imgEl.dataset.src = cur.imageResolved;
+  }
 
   setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
   setNextCard(queue[queueIndex+2], 'n2Qty','n2Aisle','n2Img');
 }
 
-function renderAll(){
+function renderAllNow(){
   setError('');
   renderCurrent();
 }
 
 // =========================================================
-// ACTIONS (ONLY Pick button advances)
+// ACTIONS
 // =========================================================
 function pickCurrent(){
   const o = currentOrder();
   if(!o) return;
+
   rebuildQueue();
   const cur = queue[queueIndex];
   if(!cur) return;
+
+  // HARD BLOCK: prevent rapid double fire
+  if(pickCurrent._lock) return;
+  pickCurrent._lock = true;
+  setTimeout(()=>{ pickCurrent._lock = false; }, 120);
 
   const prev = isPicked(o.orderId, cur.key);
   const prevIndex = queueIndex;
@@ -686,35 +737,15 @@ function pickCurrent(){
   setPicked(o.orderId, cur.key, true);
   undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
 
-  renderAll();
-}
-
-// ✅ tap-safe wrapper: prevents double picks from ghost taps / rapid taps
-function guardedPick(){
-  const now = Date.now();
-  if(PICK_LOCKED) return;
-  if(now - LAST_PICK_TS < PICK_LOCK_MS) return;
-
-  PICK_LOCKED = true;
-  LAST_PICK_TS = now;
-
-  const btn = $('btnPickNext');
-  if(btn) btn.disabled = true;
-
-  try{ pickCurrent(); }
-  finally{
-    setTimeout(()=>{
-      PICK_LOCKED = false;
-      if(btn) btn.disabled = false;
-    }, PICK_LOCK_MS);
-  }
+  updateListDoneState(cur.key);
+  requestRender();
 }
 
 function skipCurrent(){
   rebuildQueue();
   if(queue.length === 0) return;
   queueIndex = Math.min(queueIndex + 1, queue.length - 1);
-  renderAll();
+  requestRender();
 }
 
 function undoLast(){
@@ -730,7 +761,8 @@ function undoLast(){
     queueIndex = pos >= 0 ? pos : Math.min(u.prevQueueIndex, Math.max(0, queue.length - 1));
   }
 
-  renderAll();
+  updateListDoneState(u.key);
+  requestRender();
 }
 
 function prevOrder(){
@@ -738,15 +770,18 @@ function prevOrder(){
     orderIndex--;
     queueIndex = 0;
     undoStack = [];
-    renderAll();
+    listBuiltForOrderId = null;
+    requestRender();
   }
 }
+
 function nextOrder(){
   if(orderIndex < orders.length - 1){
     orderIndex++;
     queueIndex = 0;
     undoStack = [];
-    renderAll();
+    listBuiltForOrderId = null;
+    requestRender();
   }
 }
 
@@ -756,19 +791,33 @@ function resetThisOrder(){
 
   const { total, picked } = totalsForOrder(o);
   const ok = confirm(
-    `Reset picked progress for Order #${o.orderId}?\n\nCustomer: ${o.customerName}\nPicked: ${picked}/${total}\n\nThis clears picked status on this device only (does not change the sheet).`
+    `Reset picked progress for Order #${o.orderId}?\n\nCustomer: ${o.customerName}\nProgress: ${picked}/${total}\n\nThis clears picked status on this device only (does not change the sheet).`
   );
   if(!ok) return;
 
-  const p = loadPicked();
+  const p = loadPickedOnce();
   delete p[o.orderId];
-  savePicked(p);
+  scheduleSavePicked();
 
   undoStack = [];
   queueIndex = 0;
+  listBuiltForOrderId = null;
 
-  renderAll();
+  requestRender();
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+}
+
+// Qty pill should ONLY advance when DONE
+function qtyPillClick(e){
+  killTap(e);
+  const o = currentOrder();
+  if(!o) return;
+
+  rebuildQueue();
+  const done = (queue.length === 0);
+  if(!done) return;
+
+  nextOrder();
 }
 
 // =========================================================
@@ -776,16 +825,25 @@ function resetThisOrder(){
 // =========================================================
 async function init(){
   try{
-    $('btnSkip')?.addEventListener('click', skipCurrent);
-    $('btnUndo')?.addEventListener('click', undoLast);
-    $('btnPrevOrder')?.addEventListener('click', prevOrder);
-    $('btnNextOrder')?.addEventListener('click', nextOrder);
-    $('btnResetOrder')?.addEventListener('click', resetThisOrder);
+    // Buttons
+    $('btnSkip')?.addEventListener('pointerdown', (e)=>{ killTap(e); skipCurrent(); }, { passive:false });
+    $('btnUndo')?.addEventListener('pointerdown', (e)=>{ killTap(e); undoLast(); }, { passive:false });
 
-    // ✅ ONLY PICK BUTTON advances (no other tap advances anything)
-    $('btnPickNext')?.addEventListener('click', guardedPick);
+    $('btnPrevOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); prevOrder(); }, { passive:false });
+    $('btnNextOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); nextOrder(); }, { passive:false });
 
-    // ✅ Load all 3 sheets
+    $('btnResetOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); resetThisOrder(); }, { passive:false });
+
+    // ONLY PICK BUTTON picks
+    $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
+      killTap(e);
+      pickCurrent();
+    }, { passive:false });
+
+    // Qty pill: only works when DONE
+    $('curQty')?.addEventListener('pointerdown', (e)=> qtyPillClick(e), { passive:false });
+
+    // Load all 3 sheets
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
@@ -796,15 +854,12 @@ async function init(){
     if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
 
     const lookupValues = lookupJson.values || [];
-    if(lookupValues.length < 2) console.warn('ImageLookup sheet has no data (continuing).');
-
     const varietyValues = varietyJson.values || [];
+
     if(varietyValues.length >= 2){
       VARIETY_PACK_MAP = buildVarietyPackMap(varietyValues);
-      console.log('Variety packs loaded:', VARIETY_PACK_MAP.size);
     }else{
       VARIETY_PACK_MAP = new Map();
-      console.warn('Variety Packs sheet has no data (continuing without expansion).');
     }
 
     const lookupMap = (lookupValues.length >= 2) ? buildLookupMap(lookupValues) : new Map();
@@ -819,7 +874,7 @@ async function init(){
       setError('No valid orders built. Check orderId + itemTitle + qty columns.');
     }
 
-    renderAll();
+    requestRender();
   }catch(e){
     setError(e.message);
     $('curTitle').textContent = 'Error';
