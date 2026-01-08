@@ -3,9 +3,16 @@
 // =========================================================
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 const ordersSheetName = 'Orders';
-const lookupSheetName = 'ImageLookup'; // MUST match tab name exactly
-const varietySheetName = 'VarietyPacks'; // <-- CREATE THIS TAB with your mapping table
-const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'.replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
+const lookupSheetName = 'ImageLookup';
+
+// IMPORTANT:
+// This must match the TAB NAME at the bottom of the spreadsheet.
+// If your tab is literally named "Variety Packs" keep it exactly like this.
+// If it is "VarietyPacks" (no space) change it to that.
+const varietySheetName = 'Variety Packs';
+
+const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
+  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7'); // defensive copy/paste glitch guard
 
 const ordersUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
@@ -26,6 +33,9 @@ let queueIndex = 0;
 
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v1';
+
+// Holds variety pack rules loaded from the sheet
+let VARIETY_MAP = new Map(); // key: normalized pack title, value: [{title, imageUrl, qtyPerPack}...]
 
 // =========================================================
 // UTILS
@@ -160,23 +170,20 @@ function formatSourceBreakdown(sources){
 // LOCATION (locCode) SORTING — FINAL RULES
 // 1) Aisle B zipper FIRST: B-N-01, B-S-01, B-N-02, B-S-02 ...
 // 2) Aisle A SECOND: A-11 → A-01 (descending)
-// NOTE: NO MORE Harmon/Temple sorting at all.
 // =========================================================
 function parseLocCode(locCode){
   const s = safe(locCode).toUpperCase();
   if(!s) return null;
 
-  // B-N-01, B-S-01  (FIRST)
   let m = s.match(/^B-([NS])-(\d{1,2})$/);
   if(m){
     const side = m[1];
     const n = parseInt(m[2],10);
     if(!Number.isFinite(n)) return null;
-    const sideOrder = (side === 'N') ? 0 : 1; // N before S
+    const sideOrder = (side === 'N') ? 0 : 1;
     return { zone:'B', idx:n, side, sortKey: [1, n, sideOrder] };
   }
 
-  // A-11, A-01  (SECOND, descending)
   m = s.match(/^A-(\d{1,2})$/);
   if(m){
     const n = parseInt(m[1],10);
@@ -192,90 +199,61 @@ function locLabel(locCode){
 }
 
 // =========================================================
-// VARIETY PACKS (DYNAMIC FROM "VarietyPacks" TAB)
-// Columns required (exact headers, case-insensitive):
-//   Variety Pack Name | Beer Name | Beer Image URL | QtyPerPackItem
+// VARIETY PACKS (AUTO-LOADED FROM SHEET: "Variety Packs")
 // =========================================================
-let VARIETY_PACK_MAP = new Map(); // key: normalized pack name -> { packName, components:[{title, qty, imageUrl}], totalPerPack }
-
 function mustHaveHeadersVariety(hmap){
   const required = ['variety pack name','beer name','beer image url','qtyperpackitem'];
   const missing = required.filter(k => !(k in hmap));
-  if(missing.length) throw new Error(`VarietyPacks headers missing: ${missing.join(', ')}`);
+  if(missing.length) throw new Error(`Variety sheet headers missing: ${missing.join(', ')}`);
 }
 
-function buildVarietyPackMap(values){
+function buildVarietyMap(values){
   if(!values || values.length < 2) return new Map();
 
-  const hmap = buildHeaderMap(values[0]);
-  mustHaveHeadersVariety(hmap);
+  const header = values[0].map(safe);
+  const idx = {};
+  header.forEach((h,i)=> idx[normalizeText(h)] = i);
 
-  const get = (row, key) => row[hmap[key]] ?? '';
+  mustHaveHeadersVariety(idx);
 
-  const temp = new Map(); // normPack -> { packName, components:[], totalPerPack:0 }
+  const out = new Map();
 
   for(const row of values.slice(1)){
-    const packName = safe(get(row, 'variety pack name'));
-    const beerName = safe(get(row, 'beer name'));
-    const beerImageUrl = safe(get(row, 'beer image url'));
-    const qty = Math.max(1, toIntQty(get(row, 'qtyperpackitem')));
+    const packName = safe(row[idx['variety pack name']] ?? '');
+    const beerName = safe(row[idx['beer name']] ?? '');
+    const beerImg  = safe(row[idx['beer image url']] ?? '');
+    const qtyRaw   = row[idx['qtyperpackitem']] ?? '';
 
     if(!packName || !beerName) continue;
 
-    const k = normalizeText(packName);
+    // Default qtyPerPackItem to 1 if blank/invalid
+    let qtyPerPack = toIntQty(qtyRaw);
+    if(qtyPerPack <= 0) qtyPerPack = 1;
 
-    if(!temp.has(k)){
-      temp.set(k, { packName, components: [], totalPerPack: 0 });
-    }
-    const rec = temp.get(k);
-    rec.components.push({ title: beerName, qty, imageUrl: beerImageUrl });
-    rec.totalPerPack += qty;
+    const key = normalizeText(packName);
+
+    if(!out.has(key)) out.set(key, []);
+    out.get(key).push({
+      title: beerName,
+      imageUrl: beerImg,
+      qtyPerPack
+    });
   }
 
-  // Hard sanity checks (fail loud in console, but don’t break picking)
-  for(const rec of temp.values()){
-    const nm = normalizeText(rec.packName);
-    const want31 = nm.includes('31 pack');
-    const want28 = nm.includes('28 pack');
-    const want24 = nm.includes('24 pack');
-    const want12 = nm.includes('12 pack');
-    const want6  = nm.includes('sixer') || nm.includes('6 pack');
-
-    if(want31 && rec.totalPerPack !== 31){
-      console.warn(`❌ Variety pack total mismatch: "${rec.packName}" totals ${rec.totalPerPack} (expected 31)`);
-    }
-    if(want28 && rec.totalPerPack !== 28){
-      console.warn(`❌ Variety pack total mismatch: "${rec.packName}" totals ${rec.totalPerPack} (expected 28)`);
-    }
-    if(want24 && rec.totalPerPack !== 24){
-      console.warn(`❌ Variety pack total mismatch: "${rec.packName}" totals ${rec.totalPerPack} (expected 24)`);
-    }
-    if(want12 && rec.totalPerPack !== 12){
-      console.warn(`❌ Variety pack total mismatch: "${rec.packName}" totals ${rec.totalPerPack} (expected 12)`);
-    }
-    if(want6 && rec.totalPerPack !== 6){
-      console.warn(`❌ Variety pack total mismatch: "${rec.packName}" totals ${rec.totalPerPack} (expected 6)`);
-    }
-  }
-
-  return temp;
+  return out;
 }
 
-function expandVarietyPackRow(r, lookupMap){
-  const packKey = normalizeText(r.itemTitle);
-  const rec = VARIETY_PACK_MAP.get(packKey);
-  if(!rec) return [r];
+function expandVarietyPackRow(r){
+  const key = normalizeText(r.itemTitle);
+  const comps = VARIETY_MAP.get(key);
+  if(!comps || !comps.length) return [r];
 
   const out = [];
   const packCount = Math.max(1, r.units || 1); // number of packs ordered
 
-  for(const c of (rec.components || [])){
-    const qtyUnits = Math.max(1, toIntQty(c.qty)) * packCount;
+  for(const c of comps){
+    const qtyUnits = (c.qtyPerPack || 1) * packCount;
     if(qtyUnits <= 0) continue;
-
-    // Prefer: component image from VarietyPacks > ImageLookup > original row image
-    const lk = lookupMap?.get(itemKeyByTitle(c.title));
-    const imgCandidate = c.imageUrl || lk?.imageUrl || r.imageUrl;
 
     out.push({
       ...r,
@@ -284,7 +262,7 @@ function expandVarietyPackRow(r, lookupMap){
       units: qtyUnits,
       packSize: 1,
       cans: qtyUnits,
-      imageUrl: imgCandidate
+      imageUrl: c.imageUrl || r.imageUrl
     });
   }
 
@@ -348,8 +326,6 @@ function buildHeaderMap(headerRow){
 }
 
 function mustHaveHeadersOrders(hmap){
-  // NOTE: Orders does NOT need variety columns anymore.
-  // Variety mapping comes from VarietyPacks tab.
   const required = ['orderid','customername','address','itemtitle','varianttitle','qty','picked','notes','imageurl'];
   const missing = required.filter(k => !(k in hmap));
   if(missing.length) throw new Error(`Orders headers missing: ${missing.join(', ')}`);
@@ -431,7 +407,7 @@ function buildOrders(rows, lookupMap){
     const merged = new Map();
 
     for(const r0 of o.itemsRaw){
-      const expandedRows = expandVarietyPackRow(r0, lookupMap);
+      const expandedRows = expandVarietyPackRow(r0);
 
       for(const r of expandedRows){
         if(!r.itemTitle) continue;
@@ -461,7 +437,6 @@ function buildOrders(rows, lookupMap){
 
         const item = merged.get(k);
 
-        // If we had placeholder but later found a real image, upgrade it
         const candidate = (lookupMap.get(k)?.imageUrl || r.imageUrl || '');
         if(item.imageResolved.startsWith('data:image') && safe(candidate).startsWith('http')){
           item.imageResolved = candidate;
@@ -815,13 +790,13 @@ async function init(){
     if(lookupValues.length < 2) throw new Error('ImageLookup sheet has no data.');
 
     const varietyValues = varietyJson.values || [];
-    if(varietyValues.length < 2) throw new Error('VarietyPacks sheet has no data.');
+    if(varietyValues.length < 2) throw new Error(`Variety sheet "${varietySheetName}" has no data.`);
 
+    // Build maps
     const lookupMap = buildLookupMap(lookupValues);
+    VARIETY_MAP = buildVarietyMap(varietyValues);
 
-    // Build variety pack map once (used by expandVarietyPackRow)
-    VARIETY_PACK_MAP = buildVarietyPackMap(varietyValues);
-
+    // Parse Orders
     const hmap = buildHeaderMap(ordersValues[0]);
     mustHaveHeadersOrders(hmap);
 
