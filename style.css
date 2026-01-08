@@ -14,16 +14,13 @@
 
 *{box-sizing:border-box}
 
-html, body{
-  height:100%;
-}
+html, body{ height:100%; }
 
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   background:var(--bg);
   color:var(--ink);
-  /* ✅ allow scroll but reduce browser gesture weirdness */
   touch-action: pan-y;
 }
 
@@ -63,7 +60,6 @@ body{
   cursor:pointer;
   box-shadow:0 10px 20px rgba(91,47,214,.20);
   -webkit-tap-highlight-color: transparent;
-  /* ✅ hint to browser this is a tap control */
   touch-action: manipulation;
 }
 .btn:active{ transform: translateY(1px); }
@@ -95,23 +91,23 @@ body{
 .whoLine{ font-weight:1000; font-size:12px; }
 .addrLine{ margin-top:1px; color:var(--muted); font-weight:900; font-size:10px; }
 
-/* 🔴 TOTAL ORDER CANS */
+/* 🔴 TOTAL ORDER CANS (BIGGER) */
 .totalCansWrap{
   display:grid;
   align-items:center;
   justify-items:end;
-  gap:2px;
+  gap:4px;
 }
 .totalCansLabel{
-  font-size:10px;
-  font-weight:1000;
+  font-size:11px;
+  font-weight:1100;
   color:#7c2d12;
-  letter-spacing:.08em;
+  letter-spacing:.12em;
 }
 .totalCansValue{
-  font-size:26px;
-  font-weight:1200;
-  color:#dc2626;
+  font-size:48px;
+  font-weight:1300;
+  color:#b91c1c;
   line-height:1;
 }
 
@@ -209,31 +205,32 @@ body{
   font-size:11px;
 }
 
-/* 🔴 MAIN CAN QTY */
+/* 🔴 MAIN CAN QTY (BIGGER) */
 .qtyAction{
-  min-width:110px;
-  height:80px;
-  border-radius:20px;
+  min-width:140px;
+  height:110px;
+  border-radius:22px;
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
-  border:3px solid #fecdd3;
+  border:4px solid #fecdd3;
   display:grid;
   place-items:center;
-  padding:6px 8px;
+  padding:10px 10px;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 .qtyAction:active{ transform: translateY(1px); }
+
 .qtyNumber{
-  font-weight:1300;
-  font-size:36px;
-  color:#b91c1c;
-  line-height:1;
+  font-weight:1400;
+  font-size:64px;
+  color:#991b1b;
+  line-height:0.95;
 }
 .qtyUnit{
-  font-size:11px;
-  font-weight:1100;
-  letter-spacing:.15em;
+  font-size:12px;
+  font-weight:1200;
+  letter-spacing:.18em;
   color:#7f1d1d;
 }
 
@@ -243,15 +240,15 @@ body{
   gap:4px;
 }
 .qtyCheck{
-  font-size:26px;
+  font-size:30px;
   font-weight:1200;
   color:#000;
   line-height:1;
 }
 .qtyNext{
-  font-size:11px;
+  font-size:12px;
   font-weight:1100;
-  letter-spacing:.08em;
+  letter-spacing:.10em;
   color:#000;
 }
 
@@ -282,12 +279,12 @@ body{
 
 /* ✅ make the can image + container non-interactive */
 .noTap{
-  pointer-events:none;
+  pointer-events:none !important;
   cursor:default;
   user-select:none;
 }
 .noTap img{
-  pointer-events:none;
+  pointer-events:none !important;
   user-select:none;
   -webkit-user-drag:none;
 }
@@ -313,12 +310,16 @@ body{
   font-size:10px;
 }
 
-/* NEXT PREVIEW */
+/* NEXT PREVIEW (PREVIEW ONLY, NOT TAPPABLE) */
 .nextRow{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:10px;
   padding:0 12px 10px;
+}
+.previewOnly{
+  opacity:0.75;
+  filter:saturate(0.9);
 }
 .nextTap{
   background:#fff;
@@ -326,12 +327,9 @@ body{
   border-radius:18px;
   padding:10px;
   box-shadow:var(--shadow);
-  cursor:pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
 }
-.nextTap:active{ transform: translateY(1px); }
 
+/* make preview qty bigger too */
 .miniTop{
   display:flex;
   justify-content:space-between;
@@ -339,28 +337,25 @@ body{
   margin-bottom:6px;
   gap:8px;
 }
-
-/* mini qty red */
 .miniQty{
-  font-weight:1200;
-  font-size:13px;
+  font-weight:1300;
+  font-size:18px;
   border-radius:12px;
-  padding:6px 8px;
+  padding:8px 10px;
 }
 .miniQtyRed{
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
   border:2px solid #fecdd3;
   color:#dc2626;
 }
-
 .miniAisle{
-  font-size:11px;
-  font-weight:1000;
+  font-size:12px;
+  font-weight:1100;
   color:var(--muted);
   background:#f3f4f6;
   border:1px solid var(--line);
   border-radius:999px;
-  padding:5px 8px;
+  padding:7px 10px;
 }
 .miniThumb{
   min-height:80px;
@@ -418,7 +413,7 @@ body{
 .listRow.done{ opacity:.55; background:#f9fafb; }
 .listRow .lTitle{ font-weight:1050; font-size:13px; line-height:1.15; }
 .listRow .lSub{ margin-top:5px; color:var(--muted); font-weight:950; font-size:12px; }
-.listRow .lQty{ align-self:center; font-weight:1200; font-size:16px; color:#111827; }
+.listRow .lQty{ align-self:center; font-weight:1200; font-size:18px; color:#111827; }
 
 /* LIST FOOTER RESET */
 .listFooter{
