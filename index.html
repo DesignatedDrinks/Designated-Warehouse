@@ -62,8 +62,6 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- Qty button is DISPLAY only when not done.
-               When order done, it becomes NEXT ORDER action (JS handles). -->
           <button class="qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
             <div class="qtyNumber" id="curQtyNumber">—</div>
             <div class="qtyUnit">CANS</div>
@@ -81,7 +79,7 @@
           </div>
 
           <div class="heroSide">
-            <!-- ✅ THE ONLY PICK BUTTON -->
+            <!-- ✅ ONLY PICK BUTTON -->
             <button id="btnPickNext" class="btn heroNext secondary" type="button">
               PICK ITEM →
             </button>
@@ -89,8 +87,9 @@
           </div>
         </div>
 
-        <div class="nextRow">
-          <button class="card nextTap" id="next1" type="button" aria-label="Next item 1">
+        <!-- ✅ PREVIEW ONLY (NOT TAPPABLE) -->
+        <div class="nextRow noTap" aria-hidden="true">
+          <div class="card nextTap previewOnly" id="next1">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n1Qty">—</div>
               <div class="miniAisle" id="n1Aisle">—</div>
@@ -98,9 +97,9 @@
             <div class="miniThumb">
               <img id="n1Img" alt="Next item image 1" draggable="false" />
             </div>
-          </button>
+          </div>
 
-          <button class="card nextTap" id="next2" type="button" aria-label="Next item 2">
+          <div class="card nextTap previewOnly" id="next2">
             <div class="miniTop">
               <div class="miniQty miniQtyRed" id="n2Qty">—</div>
               <div class="miniAisle" id="n2Aisle">—</div>
@@ -108,7 +107,7 @@
             <div class="miniThumb">
               <img id="n2Img" alt="Next item image 2" draggable="false" />
             </div>
-          </button>
+          </div>
         </div>
 
         <div class="actions">
