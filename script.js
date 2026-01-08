@@ -221,14 +221,31 @@ function mustHaveHeadersOrders(hmap){
 // =========================================================
 // VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
 // - Reads QtyPerPackItem
-// - Matches pack titles even if Orders has vendor prefix
+// - Robust title matching (handles "- 28 Pack" suffixes, etc.)
 // =========================================================
 function stripVendorPrefix(title){
-  // If title starts with "Something (...)" vendor prefix, remove it.
   // Example: "Designated Drinks (Non-Alcoholic) Dry January Super 31 Pack" -> "Dry January Super 31 Pack"
   const t = safe(title);
   const m = t.match(/^\s*.*?\)\s*(.+)$/); // everything after first ")"
   return m ? safe(m[1]) : t;
+}
+
+function normalizePackTitle(title){
+  let t = safe(title);
+
+  // remove vendor prefix
+  t = stripVendorPrefix(t);
+
+  // normalize dash characters
+  t = t.replace(/[–—]/g, '-');
+
+  // If it ends like "... - 28 Pack - 28 Pack", collapse to "... - 28 Pack"
+  t = t.replace(/(\b\d+\s*pack\b)\s*-\s*\1\b\s*$/i, '$1');
+
+  // If it ends like "... Super 31 Pack - 31 Pack", remove the trailing "- 31 Pack"
+  t = t.replace(/\s*-\s*\d+\s*pack\b\s*$/i, '');
+
+  return normalizeText(t);
 }
 
 function buildVarietyPackMap(values){
@@ -258,26 +275,20 @@ function buildVarietyPackMap(values){
       qty = Number.isFinite(q) && q > 0 ? q : 1;
     }
 
-    const keyExact = normalizeText(packTitleRaw);
-    const keyStripped = normalizeText(stripVendorPrefix(packTitleRaw));
-
-    // ensure both keys point to same record (so either title matches)
-    const record = out.get(keyExact) || out.get(keyStripped) || { packTitle: packTitleRaw, components: [] };
+    const keyPack = normalizePackTitle(packTitleRaw);
+    const record = out.get(keyPack) || { packTitle: packTitleRaw, components: [] };
 
     record.packTitle = record.packTitle || packTitleRaw;
     record.components.push({ title: beerTitle, qty });
 
-    out.set(keyExact, record);
-    out.set(keyStripped, record);
+    out.set(keyPack, record);
   }
 
   return out;
 }
 
 function findVarietyPackRule(itemTitle){
-  const k1 = normalizeText(itemTitle);
-  const k2 = normalizeText(stripVendorPrefix(itemTitle));
-  return VARIETY_PACK_MAP.get(k1) || VARIETY_PACK_MAP.get(k2) || null;
+  return VARIETY_PACK_MAP.get(normalizePackTitle(itemTitle)) || null;
 }
 
 function expandVarietyPackRow(r){
@@ -289,7 +300,7 @@ function expandVarietyPackRow(r){
 
   for(const c of (rule.components || [])){
     const perPack = Math.max(1, toIntQty(c.qty));
-    const qtyUnits = perPack * packCount; // ✅ this is the x2/x3 logic
+    const qtyUnits = perPack * packCount; // ✅ multiplier logic (QtyPerPackItem × #packs)
     if(qtyUnits <= 0) continue;
 
     out.push({
@@ -651,7 +662,6 @@ function renderCurrent(){
   const srcText = cur.sources?.length ? formatSourceBreakdown(cur.sources) : '';
   const locText = cur.locCode ? locLabel(cur.locCode) : '—';
 
-  // ✅ FIXED: no extra parenthesis (this was the crash)
   $('curSub').innerHTML =
     `<span class="badge">${escapeHtml(locText)}</span>` +
     (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
