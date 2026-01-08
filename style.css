@@ -23,22 +23,8 @@ body{
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   background:var(--bg);
   color:var(--ink);
-}
-
-/* =========================================================
-   MOBILE / TABLET TAP SAFETY (reduces double-tap chaos)
-   ========================================================= */
-button, .btn, .nextTap, .qtyAction, .listRow{
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  user-select:none;
-  -webkit-user-select:none;
-  -webkit-touch-callout:none;
-}
-img{
-  user-select:none;
-  -webkit-user-select:none;
-  -webkit-user-drag:none;
+  /* ✅ allow scroll but reduce browser gesture weirdness */
+  touch-action: pan-y;
 }
 
 /* TOP */
@@ -76,6 +62,9 @@ img{
   color:#fff;
   cursor:pointer;
   box-shadow:0 10px 20px rgba(91,47,214,.20);
+  -webkit-tap-highlight-color: transparent;
+  /* ✅ hint to browser this is a tap control */
+  touch-action: manipulation;
 }
 .btn:active{ transform: translateY(1px); }
 .btn.secondary{
@@ -86,14 +75,6 @@ img{
 .btn.danger{
   background:var(--danger);
   box-shadow:0 10px 20px rgba(239,68,68,.18);
-}
-
-/* Optional: visual feedback when an action is temporarily locked by JS */
-.btn.locked,
-.qtyAction.locked,
-.nextTap.locked{
-  opacity:.65;
-  pointer-events:none;
 }
 
 /* ORDER CARD */
@@ -114,7 +95,33 @@ img{
 .whoLine{ font-weight:1000; font-size:12px; }
 .addrLine{ margin-top:1px; color:var(--muted); font-weight:900; font-size:10px; }
 
-.chips{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+/* 🔴 TOTAL ORDER CANS */
+.totalCansWrap{
+  display:grid;
+  align-items:center;
+  justify-items:end;
+  gap:2px;
+}
+.totalCansLabel{
+  font-size:10px;
+  font-weight:1000;
+  color:#7c2d12;
+  letter-spacing:.08em;
+}
+.totalCansValue{
+  font-size:26px;
+  font-weight:1200;
+  color:#dc2626;
+  line-height:1;
+}
+
+.chips{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  padding:0 12px 6px;
+}
 .chip{
   background:#f3f4f6;
   border:1px solid var(--line);
@@ -123,6 +130,7 @@ img{
   font-weight:1000;
   font-size:10px;
 }
+.mutedChip{ opacity:.6; }
 
 .progressWrap{ padding:0 12px 8px; }
 .progressBar{
@@ -201,25 +209,32 @@ img{
   font-size:11px;
 }
 
-/* MAIN QTY / DONE ACTION (RED) */
+/* 🔴 MAIN CAN QTY */
 .qtyAction{
-  min-width:80px;
-  height:64px;
-  border-radius:18px;
+  min-width:110px;
+  height:80px;
+  border-radius:20px;
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
-  border:2px solid #fecdd3;
+  border:3px solid #fecdd3;
   display:grid;
   place-items:center;
   padding:6px 8px;
   cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .qtyAction:active{ transform: translateY(1px); }
-
 .qtyNumber{
-  font-weight:1200;
-  font-size:28px;
-  color:#dc2626;
+  font-weight:1300;
+  font-size:36px;
+  color:#b91c1c;
   line-height:1;
+}
+.qtyUnit{
+  font-size:11px;
+  font-weight:1100;
+  letter-spacing:.15em;
+  color:#7f1d1d;
 }
 
 .qtyDone{
@@ -265,16 +280,18 @@ img{
   display:block;
 }
 
-/* make can image + container non-interactive */
+/* ✅ make the can image + container non-interactive */
 .noTap{
   pointer-events:none;
   cursor:default;
+  user-select:none;
 }
 .noTap img{
   pointer-events:none;
+  user-select:none;
+  -webkit-user-drag:none;
 }
 
-/* Right side */
 .heroSide{
   display:grid;
   grid-template-rows: 1fr auto;
@@ -310,6 +327,8 @@ img{
   padding:10px;
   box-shadow:var(--shadow);
   cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .nextTap:active{ transform: translateY(1px); }
 
@@ -321,7 +340,7 @@ img{
   gap:8px;
 }
 
-/* mini qty RED */
+/* mini qty red */
 .miniQty{
   font-weight:1200;
   font-size:13px;
@@ -392,6 +411,8 @@ img{
   border-bottom:1px solid var(--line);
   background:#fff;
   cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 .listRow:last-child{ border-bottom:0; }
 .listRow.done{ opacity:.55; background:#f9fafb; }
