@@ -196,163 +196,6 @@ function locLabel(locCode){
 }
 
 // =========================================================
-// VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
-// - bulletproof matching (full title + stripped vendor prefix)
-// - respects QtyPerPackItem (x2 etc)
-// =========================================================
-function stripBrandPrefix(s){
-  return normalizeText(s)
-    .replace(/^designated drinks non alcoholic\s+/,'')
-    .replace(/^designated drinks\s+/,'')
-    .trim();
-}
-
-function allPackMatchKeys(packTitle){
-  const full = normalizeText(packTitle);
-  const stripped = stripBrandPrefix(packTitle);
-  const keys = new Set([full, stripped]);
-
-  keys.add(full.replace(/\bnon alcoholic\b/g,'').replace(/\s+/g,' ').trim());
-  keys.add(stripped.replace(/\bnon alcoholic\b/g,'').replace(/\s+/g,' ').trim());
-
-  return Array.from(keys).filter(Boolean);
-}
-
-function buildVarietyPackMap(values){
-  const out = new Map();
-  if(!values || values.length < 2) return out;
-
-  const hmap = buildHeaderMap(values[0]);
-
-  const colPack = pickHeader(hmap, [
-    'variety pack name','varietypackname','pack name','pack','variety pack'
-  ]);
-
-  const colBeer = pickHeader(hmap, [
-    'beer name','beername','item','title','product','component','component title'
-  ]);
-
-  const colQty  = pickHeader(hmap, [
-    'qtyperpackitem','qty per pack item','qty per pack','per pack qty','qty','quantity','perpack'
-  ]);
-
-  if(colPack == null || colBeer == null){
-    // Don’t hard-fail: app runs without expansion
-    return out;
-  }
-
-  for(const row of values.slice(1)){
-    const packTitle = safe(row[colPack] ?? '');
-    const beerTitle = safe(row[colBeer] ?? '');
-    if(!packTitle || !beerTitle) continue;
-
-    let qtyRaw = (colQty != null) ? row[colQty] : 1;
-    let qty = toIntQty(qtyRaw);
-    if(!Number.isFinite(qty) || qty <= 0) qty = 1;
-
-    for(const key of allPackMatchKeys(packTitle)){
-      if(!out.has(key)) out.set(key, { packTitle, components: [] });
-      out.get(key).components.push({ title: beerTitle, qty });
-    }
-  }
-
-  return out;
-}
-
-function findVarietyPackRule(itemTitle){
-  const fullKey = normalizeText(itemTitle);
-  const strippedKey = stripBrandPrefix(itemTitle);
-
-  if(VARIETY_PACK_MAP.has(fullKey)) return VARIETY_PACK_MAP.get(fullKey);
-  if(VARIETY_PACK_MAP.has(strippedKey)) return VARIETY_PACK_MAP.get(strippedKey);
-
-  // last resort: contains match
-  for(const [k, rule] of VARIETY_PACK_MAP.entries()){
-    if(!k) continue;
-    if(fullKey.includes(k) || k.includes(fullKey)) return rule;
-    if(strippedKey.includes(k) || k.includes(strippedKey)) return rule;
-  }
-
-  return null;
-}
-
-function expandVarietyPackRow(r){
-  const rule = findVarietyPackRule(r.itemTitle);
-  if(!rule) return [r];
-
-  // packs ordered should be line qty, not cans.
-  // If someone has qty=31 for a "31 pack", treat as 1 pack.
-  let packCount = Math.max(1, r.units || 1);
-  if(r.packSize >= 10 && packCount === r.packSize) packCount = 1;
-
-  const out = [];
-
-  for(const c of (rule.components || [])){
-    const perPack = Math.max(1, toIntQty(c.qty));
-    const qtyUnits = perPack * packCount;
-    if(qtyUnits <= 0) continue;
-
-    out.push({
-      ...r,
-      itemTitle: c.title,
-      variantTitle: 'Single',
-      units: qtyUnits,
-      packSize: 1,
-      cans: qtyUnits,
-    });
-  }
-
-  return out.length ? out : [r];
-}
-
-// =========================================================
-// PICKED STATE (LOCAL ONLY)
-// =========================================================
-function loadPicked(){
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-  catch { return {}; }
-}
-function savePicked(obj){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
-function isPicked(orderId, key){
-  const p = loadPicked();
-  return !!(p[orderId] && p[orderId][key]);
-}
-function setPicked(orderId, key, val){
-  const p = loadPicked();
-  if(!p[orderId]) p[orderId] = {};
-  p[orderId][key] = !!val;
-  savePicked(p);
-}
-
-// =========================================================
-// BOX BREAKDOWN (24 / 12 / 6)
-// =========================================================
-function boxBreakdown(totalCans){
-  let n = Math.max(0, totalCans|0);
-  const out = { b24:0, b12:0, b6:0 };
-
-  out.b24 = Math.floor(n / 24);
-  n = n % 24;
-
-  if(n === 0) return out;
-
-  if(n <= 6){ out.b6 = 1; return out; }
-  if(n <= 12){ out.b12 = 1; return out; }
-
-  out.b24 += 1;
-  return out;
-}
-function boxLabel(totalCans){
-  const b = boxBreakdown(totalCans);
-  const parts = [];
-  if(b.b24) parts.push(`${b.b24}×24`);
-  if(b.b12) parts.push(`${b.b12}×12`);
-  if(b.b6)  parts.push(`${b.b6}×6`);
-  if(!parts.length) parts.push('0');
-  return parts.join(' + ');
-}
-
-// =========================================================
 // PARSE SHEET HELPERS (TOLERANT)
 // =========================================================
 function buildHeaderMap(headerRow){
@@ -375,6 +218,96 @@ function mustHaveHeadersOrders(hmap){
   if(missing.length) throw new Error(`Orders sheet missing required headers: ${missing.join(', ')}`);
 }
 
+// =========================================================
+// VARIETY PACK EXPANSION (AUTO from Variety Packs sheet)
+// - Reads QtyPerPackItem
+// - Matches pack titles even if Orders has vendor prefix
+// =========================================================
+function stripVendorPrefix(title){
+  // If title starts with "Something (...)" vendor prefix, remove it.
+  // Example: "Designated Drinks (Non-Alcoholic) Dry January Super 31 Pack" -> "Dry January Super 31 Pack"
+  const t = safe(title);
+  const m = t.match(/^\s*.*?\)\s*(.+)$/); // everything after first ")"
+  return m ? safe(m[1]) : t;
+}
+
+function buildVarietyPackMap(values){
+  const out = new Map();
+  if(!values || values.length < 2) return out;
+
+  const hmap = buildHeaderMap(values[0]);
+
+  // Your exact headers + a few safe aliases
+  const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
+  const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
+  const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
+
+  if(colPack == null || colBeer == null){
+    console.warn('Variety Packs: required headers not found. No expansion will occur.');
+    return out;
+  }
+
+  for(const row of values.slice(1)){
+    const packTitleRaw = safe(row[colPack] ?? '');
+    const beerTitle = safe(row[colBeer] ?? '');
+    if(!packTitleRaw || !beerTitle) continue;
+
+    let qty = 1;
+    if(colQty != null){
+      const q = toIntQty(row[colQty]);
+      qty = Number.isFinite(q) && q > 0 ? q : 1;
+    }
+
+    const keyExact = normalizeText(packTitleRaw);
+    const keyStripped = normalizeText(stripVendorPrefix(packTitleRaw));
+
+    // ensure both keys point to same record (so either title matches)
+    const record = out.get(keyExact) || out.get(keyStripped) || { packTitle: packTitleRaw, components: [] };
+
+    record.packTitle = record.packTitle || packTitleRaw;
+    record.components.push({ title: beerTitle, qty });
+
+    out.set(keyExact, record);
+    out.set(keyStripped, record);
+  }
+
+  return out;
+}
+
+function findVarietyPackRule(itemTitle){
+  const k1 = normalizeText(itemTitle);
+  const k2 = normalizeText(stripVendorPrefix(itemTitle));
+  return VARIETY_PACK_MAP.get(k1) || VARIETY_PACK_MAP.get(k2) || null;
+}
+
+function expandVarietyPackRow(r){
+  const rule = findVarietyPackRule(r.itemTitle);
+  if(!rule) return [r];
+
+  const out = [];
+  const packCount = Math.max(1, r.units || 1); // number of packs ordered
+
+  for(const c of (rule.components || [])){
+    const perPack = Math.max(1, toIntQty(c.qty));
+    const qtyUnits = perPack * packCount; // ✅ this is the x2/x3 logic
+    if(qtyUnits <= 0) continue;
+
+    out.push({
+      ...r,
+      itemTitle: c.title,
+      variantTitle: 'Single',
+      units: qtyUnits,
+      packSize: 1,
+      cans: qtyUnits,
+    });
+  }
+
+  return out.length ? out : [r];
+}
+
+// =========================================================
+// ORDERS ROW PARSING
+// =========================================================
 function rowToOrderObj(row, hmap){
   const idxOrderId = pickHeader(hmap, ['orderid','order id','id']);
   const idxCust    = pickHeader(hmap, ['customername','customer name','customer']);
@@ -436,6 +369,53 @@ function buildLookupMap(values){
     out.set(key, { imageUrl, locCode, rawTitle: itemTitle });
   }
   return out;
+}
+
+// =========================================================
+// PICKED STATE (LOCAL ONLY)
+// =========================================================
+function loadPicked(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function savePicked(obj){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
+function isPicked(orderId, key){
+  const p = loadPicked();
+  return !!(p[orderId] && p[orderId][key]);
+}
+function setPicked(orderId, key, val){
+  const p = loadPicked();
+  if(!p[orderId]) p[orderId] = {};
+  p[orderId][key] = !!val;
+  savePicked(p);
+}
+
+// =========================================================
+// BOX BREAKDOWN (24 / 12 / 6)
+// =========================================================
+function boxBreakdown(totalCans){
+  let n = Math.max(0, totalCans|0);
+  const out = { b24:0, b12:0, b6:0 };
+
+  out.b24 = Math.floor(n / 24);
+  n = n % 24;
+
+  if(n === 0) return out;
+
+  if(n <= 6){ out.b6 = 1; return out; }
+  if(n <= 12){ out.b12 = 1; return out; }
+
+  out.b24 += 1;
+  return out;
+}
+function boxLabel(totalCans){
+  const b = boxBreakdown(totalCans);
+  const parts = [];
+  if(b.b24) parts.push(`${b.b24}×24`);
+  if(b.b12) parts.push(`${b.b12}×12`);
+  if(b.b6)  parts.push(`${b.b6}×6`);
+  if(!parts.length) parts.push('0');
+  return parts.join(' + ');
 }
 
 // =========================================================
@@ -671,9 +651,10 @@ function renderCurrent(){
   const srcText = cur.sources?.length ? formatSourceBreakdown(cur.sources) : '';
   const locText = cur.locCode ? locLabel(cur.locCode) : '—';
 
+  // ✅ FIXED: no extra parenthesis (this was the crash)
   $('curSub').innerHTML =
     `<span class="badge">${escapeHtml(locText)}</span>` +
-    (srcText ? `<span class="badge">${escapeHtml(srcText))}</span>` : '');
+    (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
 
   setQtyMode('qty', cur.qtyCans);
 
