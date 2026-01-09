@@ -411,7 +411,11 @@ body{
   font-weight:950;
   line-height:1.2;
 }
-
+/* FAILSAFE: if any old PICK button exists, kill it */
+#btnPickNext,
+.pickBtn,
+.heroSide { display:none !important; 
+}
 /* TABLET+: make QTY button MUCH bigger */
 @media (min-width: 768px){
   .qtyAction{
