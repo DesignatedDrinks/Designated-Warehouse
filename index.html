@@ -33,7 +33,6 @@
         </div>
       </div>
 
-      <!-- Keep the bar, remove picked counter -->
       <div class="progressWrap">
         <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
         <div class="progressMeta single">
@@ -55,14 +54,19 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- Quantity pill (NOT a pick button). When order is DONE it becomes NEXT. -->
-          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
+          <!-- HOLD this button (0.4s) to confirm PICK.
+               When order is DONE, it becomes NEXT (hold 0.4s). -->
+          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold 0.4s to confirm">
+            <div class="holdFill" id="holdFill" aria-hidden="true"></div>
+
             <div class="qtyNumber" id="curQtyNumber">—</div>
 
             <div class="qtyDone" id="curQtyDone" style="display:none;">
               <div class="qtyCheck">✔</div>
               <div class="qtyNext">NEXT</div>
             </div>
+
+            <div class="holdHint">Hold 0.4s</div>
           </button>
         </div>
 
@@ -73,10 +77,9 @@
           </div>
 
           <div class="heroSide">
-            <!-- ONLY THIS BUTTON PICKS -->
+            <!-- PICK BUTTON still available -->
             <button id="btnPickNext" class="btn heroNext pickBtn" type="button">PICK →</button>
-
-            <!-- REMOVED the instructions below the button (per request) -->
+            <!-- instructions removed -->
           </div>
         </div>
 
