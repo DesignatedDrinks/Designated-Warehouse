@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=8" />
 </head>
 <body>
 
@@ -54,7 +54,7 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- HOLD this button (0.4s) to confirm PICK.
+          <!-- HOLD this red block (0.4s) to confirm PICK.
                When order is DONE, it becomes NEXT (hold 0.4s). -->
           <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold 0.4s to confirm">
             <div class="holdFill" id="holdFill" aria-hidden="true"></div>
@@ -70,16 +70,10 @@
           </button>
         </div>
 
-        <div class="heroPick">
-          <!-- NON-CLICKABLE CAN IMAGE -->
+        <!-- SINGLE COLUMN HERO: ONLY IMAGE (NO PICK BUTTON) -->
+        <div class="heroPick singleHero">
           <div class="imgWrap heroImg noTap" aria-hidden="true">
             <img id="curImg" alt="Current item image" draggable="false" />
-          </div>
-
-          <div class="heroSide">
-            <!-- PICK BUTTON still available -->
-            <button id="btnPickNext" class="btn heroNext pickBtn" type="button">PICK →</button>
-            <!-- instructions removed -->
           </div>
         </div>
 
@@ -135,6 +129,6 @@
     </section>
   </main>
 
-  <script src="./script.js"></script>
+  <script src="./script.js?v=8"></script>
 </body>
 </html>
