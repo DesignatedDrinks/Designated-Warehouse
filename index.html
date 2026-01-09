@@ -33,6 +33,7 @@
         </div>
       </div>
 
+      <!-- Keep the bar, remove picked counter -->
       <div class="progressWrap">
         <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
         <div class="progressMeta single">
@@ -53,7 +54,16 @@
             <div class="title" id="curTitle">Loading…</div>
             <div class="sub" id="curSub">—</div>
           </div>
-          <!-- qty button moved beside can (heroSide) -->
+
+          <!-- Quantity pill (NOT a pick button). When order is DONE it becomes NEXT. -->
+          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
+            <div class="qtyNumber" id="curQtyNumber">—</div>
+
+            <div class="qtyDone" id="curQtyDone" style="display:none;">
+              <div class="qtyCheck">✔</div>
+              <div class="qtyNext">NEXT</div>
+            </div>
+          </button>
         </div>
 
         <div class="heroPick">
@@ -63,23 +73,10 @@
           </div>
 
           <div class="heroSide">
+            <!-- ONLY THIS BUTTON PICKS -->
+            <button id="btnPickNext" class="btn heroNext pickBtn" type="button">PICK →</button>
 
-            <!-- HOLD BUTTON = QUANTITY (and becomes NEXT when done) -->
-            <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold to confirm / Next order">
-              <div class="holdFill" id="holdFill" aria-hidden="true"></div>
-
-              <!-- NORMAL MODE -->
-              <div class="qtyNumber" id="curQtyNumber">—</div>
-
-              <!-- DONE MODE -->
-              <div class="qtyDone" id="curQtyDone" style="display:none;">
-                <div class="qtyCheck">✔</div>
-                <div class="qtyNext">NEXT</div>
-              </div>
-            </button>
-
-            <!-- instructions removed per request -->
-
+            <!-- REMOVED the instructions below the button (per request) -->
           </div>
         </div>
 
