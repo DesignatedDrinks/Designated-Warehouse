@@ -184,11 +184,11 @@ body{
   font-size:11px;
 }
 
-/* MAIN QTY HOLD BUTTON */
+/* QTY HOLD BUTTON */
 .qtyAction{
   position:relative;
-  min-width:110px;
-  height:86px;
+  min-width:112px;
+  height:88px;
   border-radius:18px;
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
   border:2px solid #fecdd3;
@@ -202,7 +202,7 @@ body{
 }
 .qtyAction:active{ transform: translateY(1px); }
 
-/* stop iOS highlight/selection on hold */
+/* stop iOS text selection / highlight on hold */
 .qtyAction,
 .qtyAction *{
   -webkit-user-select:none;
@@ -217,14 +217,13 @@ body{
   opacity:.18;
   transform:scaleX(0);
   transform-origin:left center;
-  transition:none;
   pointer-events:none;
 }
 
 .qtyNumber{
   position:relative;
   font-weight:1200;
-  font-size:44px;
+  font-size:46px;
   color:#dc2626;
   line-height:1;
 }
@@ -257,7 +256,7 @@ body{
   opacity:.85;
 }
 
-/* HERO (single column now) */
+/* HERO SINGLE COLUMN */
 .heroPick{
   display:grid;
   grid-template-columns: 1fr;
@@ -411,24 +410,20 @@ body{
   font-weight:950;
   line-height:1.2;
 }
-/* FAILSAFE: if any old PICK button exists, kill it */
-#btnPickNext,
-.pickBtn,
-.heroSide { display:none !important; 
-}
-/* TABLET+: make QTY button MUCH bigger */
+
+/* TABLET+: make QTY button bigger */
 @media (min-width: 768px){
   .qtyAction{
-    min-width:170px;
-    height:130px;
+    min-width:190px;
+    height:138px;
     border-radius:24px;
     border-width:3px;
   }
-  .qtyNumber{ font-size:72px; }
+  .qtyNumber{ font-size:78px; }
   .holdHint{ font-size:11px; }
 }
 
-@media (min-width: 1024px){
-  .qtyAction{ min-width:200px; height:148px; }
-  .qtyNumber{ font-size:80px; }
-}
+/* FAILSAFE: if any old PICK button exists anywhere, hide it */
+#btnPickNext,
+.pickBtn,
+.heroSide { display:none !important; }
