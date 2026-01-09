@@ -225,33 +225,31 @@ body{
 
 .heroSide{
   display:grid;
-  grid-template-rows: auto auto auto;
+  grid-template-rows:auto;
   gap:8px;
   align-content:start;
 }
 
-/* MAIN QTY / DONE ACTION (BIGGER + RED) */
+/* MAIN QTY / DONE ACTION */
 .qtyAction{
   position:relative;
   width:100%;
-  height:96px;
-  border-radius:18px;
+  border-radius:22px;
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
-  border:2px solid #fecdd3;
+  border:3px solid #fecdd3;
   display:grid;
   place-items:center;
   padding:10px 10px;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  overflow:hidden;
 }
 .qtyAction:active{ transform: translateY(1px); }
 
 /* Prevent iOS text selection + callout while holding */
 .qtyAction,
-.qtyAction * ,
-.heroHint,
-.heroHint *{
+.qtyAction *{
   -webkit-user-select:none;
   user-select:none;
   -webkit-touch-callout:none;
@@ -261,7 +259,7 @@ body{
 .holdFill{
   position:absolute;
   inset:0;
-  border-radius:16px;
+  border-radius:18px;
   transform:scaleX(0);
   transform-origin:left center;
   opacity:.25;
@@ -269,33 +267,12 @@ body{
   pointer-events:none;
 }
 
-.qtyStack{
-  position:relative;
-  display:grid;
-  place-items:center;
-  gap:2px;
-  line-height:1;
-}
-
-.qtyTop{
-  font-weight:1100;
-  font-size:12px;
-  letter-spacing:.08em;
-  color:#991b1b;
-}
-
+/* BIG NUMBER */
 .qtyNumber{
+  position:relative;
   font-weight:1200;
-  font-size:44px;
   color:#dc2626;
   line-height:1;
-}
-
-.qtyBottom{
-  font-weight:1100;
-  font-size:11px;
-  letter-spacing:.08em;
-  color:#991b1b;
 }
 
 /* DONE state */
@@ -306,29 +283,16 @@ body{
   gap:4px;
 }
 .qtyCheck{
-  font-size:30px;
+  font-size:34px;
   font-weight:1200;
   color:#000;
   line-height:1;
 }
 .qtyNext{
-  font-size:11px;
+  font-size:12px;
   font-weight:1100;
   letter-spacing:.08em;
   color:#000;
-}
-
-/* HINTS */
-.heroHint{
-  text-align:center;
-  color:var(--muted);
-  font-weight:900;
-  font-size:12px;
-  line-height:1.2;
-}
-.heroHint.strongHint{
-  color:#111827;
-  font-weight:1100;
 }
 
 /* NEXT PREVIEW (VIEW ONLY) */
@@ -454,27 +418,33 @@ body{
    RESPONSIVE POSITIONING
    ========================= */
 
-/* MOBILE: stack image then button under it */
+/* MOBILE: stack image then button under it (and make it BIG) */
 @media (max-width: 640px){
-  .heroPick{
-    grid-template-columns: 1fr;
-  }
+  .heroPick{ grid-template-columns:1fr; }
   .qtyAction{
-    height: 92px;
-    margin-top: 8px;
+    height:110px;
+    margin-top:10px;
   }
-  .heroHint{
-    font-size:12px;
-  }
+  .qtyNumber{ font-size:56px; }
 }
 
-/* TABLET+: keep it beside the can, tight and obvious */
+/* TABLET+: BIGGER button beside the can */
 @media (min-width: 641px){
   .heroPick{
-    grid-template-columns: 1fr 170px;
+    grid-template-columns: 1fr 220px; /* wider side */
     gap: 12px;
   }
   .qtyAction{
-    height: 96px;
+    height:150px;              /* BIG */
+    border-radius:26px;
+    border-width:4px;
   }
+  .qtyNumber{ font-size:72px; } /* BIG number */
+}
+
+/* LARGE TABLET / DESKTOP (optional extra punch) */
+@media (min-width: 900px){
+  .heroPick{ grid-template-columns: 1fr 260px; }
+  .qtyAction{ height:170px; }
+  .qtyNumber{ font-size:80px; }
 }
