@@ -186,19 +186,21 @@ body{
   font-size:11px;
 }
 
-/* MAIN QTY / DONE ACTION (BIGGER + RED) */
+/* MAIN QTY HOLD BUTTON */
 .qtyAction{
-  min-width:96px;
-  height:74px;
+  position:relative;
+  min-width:110px;
+  height:86px;
   border-radius:18px;
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
   border:2px solid #fecdd3;
   display:grid;
   place-items:center;
-  padding:6px 8px;
+  padding:10px 10px 8px;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  overflow:hidden;
 }
 .qtyAction:active{ transform: translateY(1px); }
 
@@ -210,14 +212,27 @@ body{
   -webkit-touch-callout:none;
 }
 
+.holdFill{
+  position:absolute;
+  inset:0;
+  background:#dc2626;
+  opacity:.18;
+  transform:scaleX(0);
+  transform-origin:left center;
+  transition:none;
+  pointer-events:none;
+}
+
 .qtyNumber{
+  position:relative;
   font-weight:1200;
-  font-size:36px;
+  font-size:44px;
   color:#dc2626;
   line-height:1;
 }
 
 .qtyDone{
+  position:relative;
   display:grid;
   place-items:center;
   gap:4px;
@@ -233,6 +248,15 @@ body{
   font-weight:1100;
   letter-spacing:.08em;
   color:#000;
+}
+
+.holdHint{
+  position:relative;
+  margin-top:4px;
+  font-size:10px;
+  font-weight:1000;
+  color:#991b1b;
+  opacity:.85;
 }
 
 /* HERO */
@@ -278,7 +302,7 @@ body{
   gap:8px;
 }
 
-/* PICK BUTTON: BIG + OBVIOUS */
+/* PICK BUTTON */
 .pickBtn{
   width:100%;
   border-radius:20px;
@@ -394,7 +418,6 @@ body{
   color:#111827;
 }
 
-/* LIST FOOTER RESET */
 .listFooter{
   padding:12px;
   border-top:1px solid var(--line);
@@ -409,28 +432,28 @@ body{
   line-height:1.2;
 }
 
-/* TABLET: make the QTY button MUCH bigger */
+/* TABLET+: make QTY button MUCH bigger */
 @media (min-width: 768px){
   .qtyAction{
-    min-width:140px;
-    height:112px;
-    border-radius:22px;
+    min-width:170px;
+    height:130px;
+    border-radius:24px;
     border-width:3px;
   }
   .qtyNumber{
-    font-size:58px;
+    font-size:72px;
   }
-  .qtyCheck{ font-size:40px; }
-  .qtyNext{ font-size:13px; }
+  .holdHint{
+    font-size:11px;
+  }
 }
 
-/* BIG TABLET / DESKTOP: even bigger */
 @media (min-width: 1024px){
   .qtyAction{
-    min-width:170px;
-    height:128px;
+    min-width:200px;
+    height:148px;
   }
   .qtyNumber{
-    font-size:68px;
+    font-size:80px;
   }
 }
