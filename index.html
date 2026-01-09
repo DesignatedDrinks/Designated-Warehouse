@@ -33,6 +33,7 @@
         </div>
       </div>
 
+      <!-- Keep the bar, remove picked counter -->
       <div class="progressWrap">
         <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
         <div class="progressMeta single">
@@ -53,7 +54,7 @@
             <div class="title" id="curTitle">Loading…</div>
             <div class="sub" id="curSub">—</div>
           </div>
-          <!-- qty button moved beside can (heroSide) -->
+          <!-- NOTE: qty button moved out of header to sit beside can -->
         </div>
 
         <div class="heroPick">
@@ -64,21 +65,27 @@
 
           <div class="heroSide">
 
-            <!-- HOLD BUTTON = QUANTITY (and becomes NEXT when done) -->
-            <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold to confirm / Next order">
+            <!-- HOLD-TO-CONFIRM QTY BUTTON (BESIDE CAN ON TABLET, BELOW CAN ON MOBILE) -->
+            <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold to confirm pick">
+              <!-- optional fill layer if your JS animates it -->
               <div class="holdFill" id="holdFill" aria-hidden="true"></div>
 
-              <!-- NORMAL MODE -->
-              <div class="qtyNumber" id="curQtyNumber">—</div>
+              <!-- normal mode -->
+              <div class="qtyStack" id="qtyStack">
+                <div class="qtyTop">PICK</div>
+                <div class="qtyNumber" id="curQtyNumber">—</div>
+                <div class="qtyBottom">CANS</div>
+              </div>
 
-              <!-- DONE MODE -->
+              <!-- done mode -->
               <div class="qtyDone" id="curQtyDone" style="display:none;">
                 <div class="qtyCheck">✔</div>
                 <div class="qtyNext">NEXT</div>
               </div>
             </button>
 
-            <!-- instructions removed per request -->
+            <div class="heroHint strongHint">Hold the red block (0.4s) to confirm</div>
+            <div class="heroHint">Image = what. Red block = how many + confirms.</div>
 
           </div>
         </div>
