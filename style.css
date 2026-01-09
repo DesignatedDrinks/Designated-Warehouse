@@ -10,6 +10,8 @@
 
   --shadow:0 12px 30px rgba(0,0,0,.08);
   --tap:56px;
+
+  --holdMs: 400ms;
 }
 
 *{box-sizing:border-box}
@@ -186,33 +188,86 @@ body{
   font-size:11px;
 }
 
-/* MAIN QTY / DONE ACTION (BIGGER + RED) */
+/* QTY ACTION (PICK+NEXT) */
 .qtyAction{
-  min-width:96px;
-  height:74px;
+  min-width:128px;
+  height:96px;
   border-radius:18px;
   background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
   border:2px solid #fecdd3;
   display:grid;
   place-items:center;
-  padding:6px 8px;
+  padding:8px 10px;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: none; /* important for press-and-hold */
+  position:relative;
+  overflow:hidden;
 }
+
 .qtyAction:active{ transform: translateY(1px); }
 
+.qtyStack{
+  display:grid;
+  place-items:center;
+  gap:2px;
+  z-index:2;
+}
+
+.qtyTop{
+  font-weight:1100;
+  font-size:12px;
+  letter-spacing:.10em;
+  color:#7f1d1d;
+}
 .qtyNumber{
   font-weight:1200;
-  font-size:36px;
+  font-size:44px;
   color:#dc2626;
   line-height:1;
 }
+.qtyBottom{
+  font-weight:1100;
+  font-size:12px;
+  letter-spacing:.10em;
+  color:#7f1d1d;
+}
 
+/* HOLD FILL */
+.holdFill{
+  position:absolute;
+  left:0;
+  bottom:0;
+  height:100%;
+  width:0%;
+  background:rgba(220,38,38,.12);
+  z-index:1;
+  transition: width var(--holdMs) linear;
+}
+
+.qtyAction.holding .holdFill{ width:100%; }
+.qtyAction.holding{
+  border-color:#fb7185;
+  box-shadow:0 10px 18px rgba(239,68,68,.14);
+}
+
+/* SUCCESS FLASH */
+.qtyAction.success{
+  border-color:#22c55e;
+  box-shadow:0 10px 18px rgba(34,197,94,.18);
+}
+.qtyAction.success .holdFill{
+  background:rgba(34,197,94,.14);
+  width:100%;
+  transition:none;
+}
+
+/* DONE STATE */
 .qtyDone{
   display:grid;
   place-items:center;
   gap:4px;
+  z-index:2;
 }
 .qtyCheck{
   font-size:30px;
@@ -266,20 +321,9 @@ body{
 
 .heroSide{
   display:grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows:auto auto;
   gap:8px;
-}
-
-/* PICK BUTTON: BIG + OBVIOUS */
-.pickBtn{
-  width:100%;
-  border-radius:20px;
-  min-height:100%;
-  font-size:22px;
-  font-weight:1200;
-  display:grid;
-  place-items:center;
-  background:linear-gradient(180deg,#5b2fd6 0%, #4b23c6 100%);
+  align-content:start;
 }
 
 .heroHint{
@@ -287,6 +331,11 @@ body{
   color:var(--muted);
   font-weight:900;
   font-size:10px;
+}
+.strongHint{
+  font-size:11px;
+  font-weight:1100;
+  color:#111827;
 }
 
 /* NEXT PREVIEW (VIEW ONLY) */
@@ -389,7 +438,7 @@ body{
 .listRow .lQty{
   align-self:center;
   font-weight:1200;
-  font-size:20px; /* bigger here too */
+  font-size:20px;
   color:#111827;
 }
 
