@@ -186,11 +186,60 @@ body{
   font-size:11px;
 }
 
+/* MAIN QTY / DONE ACTION (BIGGER + RED) */
+.qtyAction{
+  min-width:96px;
+  height:74px;
+  border-radius:18px;
+  background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
+  border:2px solid #fecdd3;
+  display:grid;
+  place-items:center;
+  padding:6px 8px;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.qtyAction:active{ transform: translateY(1px); }
+
+/* FIX: stop iOS text highlight/selection on hold */
+.qtyAction,
+.qtyAction *{
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+
+.qtyNumber{
+  font-weight:1200;
+  font-size:36px;
+  color:#dc2626;
+  line-height:1;
+}
+
+.qtyDone{
+  display:grid;
+  place-items:center;
+  gap:4px;
+}
+.qtyCheck{
+  font-size:30px;
+  font-weight:1200;
+  color:#000;
+  line-height:1;
+}
+.qtyNext{
+  font-size:11px;
+  font-weight:1100;
+  letter-spacing:.08em;
+  color:#000;
+}
+
 /* HERO */
 .heroPick{
   display:grid;
-  grid-template-columns: 1fr 170px;
-  gap:12px;
+  grid-template-columns: 1fr 160px;
+  gap:10px;
   padding:0 12px 10px;
   align-items:stretch;
 }
@@ -225,74 +274,20 @@ body{
 
 .heroSide{
   display:grid;
-  grid-template-rows:auto;
+  grid-template-rows: 1fr;
   gap:8px;
-  align-content:start;
 }
 
-/* MAIN QTY / DONE ACTION */
-.qtyAction{
-  position:relative;
+/* PICK BUTTON: BIG + OBVIOUS */
+.pickBtn{
   width:100%;
-  border-radius:22px;
-  background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
-  border:3px solid #fecdd3;
+  border-radius:20px;
+  min-height:100%;
+  font-size:22px;
+  font-weight:1200;
   display:grid;
   place-items:center;
-  padding:10px 10px;
-  cursor:pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  overflow:hidden;
-}
-.qtyAction:active{ transform: translateY(1px); }
-
-/* Prevent iOS text selection + callout while holding */
-.qtyAction,
-.qtyAction *{
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
-}
-
-/* Optional fill layer for hold animation (if your JS uses it) */
-.holdFill{
-  position:absolute;
-  inset:0;
-  border-radius:18px;
-  transform:scaleX(0);
-  transform-origin:left center;
-  opacity:.25;
-  background:#dc2626;
-  pointer-events:none;
-}
-
-/* BIG NUMBER */
-.qtyNumber{
-  position:relative;
-  font-weight:1200;
-  color:#dc2626;
-  line-height:1;
-}
-
-/* DONE state */
-.qtyDone{
-  position:relative;
-  display:grid;
-  place-items:center;
-  gap:4px;
-}
-.qtyCheck{
-  font-size:34px;
-  font-weight:1200;
-  color:#000;
-  line-height:1;
-}
-.qtyNext{
-  font-size:12px;
-  font-weight:1100;
-  letter-spacing:.08em;
-  color:#000;
+  background:linear-gradient(180deg,#5b2fd6 0%, #4b23c6 100%);
 }
 
 /* NEXT PREVIEW (VIEW ONLY) */
@@ -414,37 +409,28 @@ body{
   line-height:1.2;
 }
 
-/* =========================
-   RESPONSIVE POSITIONING
-   ========================= */
-
-/* MOBILE: stack image then button under it (and make it BIG) */
-@media (max-width: 640px){
-  .heroPick{ grid-template-columns:1fr; }
+/* TABLET: make the QTY button MUCH bigger */
+@media (min-width: 768px){
   .qtyAction{
-    height:110px;
-    margin-top:10px;
+    min-width:140px;
+    height:112px;
+    border-radius:22px;
+    border-width:3px;
   }
-  .qtyNumber{ font-size:56px; }
+  .qtyNumber{
+    font-size:58px;
+  }
+  .qtyCheck{ font-size:40px; }
+  .qtyNext{ font-size:13px; }
 }
 
-/* TABLET+: BIGGER button beside the can */
-@media (min-width: 641px){
-  .heroPick{
-    grid-template-columns: 1fr 220px; /* wider side */
-    gap: 12px;
-  }
+/* BIG TABLET / DESKTOP: even bigger */
+@media (min-width: 1024px){
   .qtyAction{
-    height:150px;              /* BIG */
-    border-radius:26px;
-    border-width:4px;
+    min-width:170px;
+    height:128px;
   }
-  .qtyNumber{ font-size:72px; } /* BIG number */
-}
-
-/* LARGE TABLET / DESKTOP (optional extra punch) */
-@media (min-width: 900px){
-  .heroPick{ grid-template-columns: 1fr 260px; }
-  .qtyAction{ height:170px; }
-  .qtyNumber{ font-size:80px; }
+  .qtyNumber{
+    font-size:68px;
+  }
 }
