@@ -36,6 +36,98 @@ const STORAGE_KEY = 'dw_picked_queue_v2';
 let VARIETY_PACK_MAP = new Map();
 
 // =========================================================
+// HOLD-TO-CONFIRM (0.4s)
+// =========================================================
+const HOLD_MS = 400;
+
+let holdTimer = null;
+let holdFired = false;
+
+function resetHoldUI(){
+  const btn = $('curQty');
+  if(!btn) return;
+  btn.classList.remove('holding','success');
+  const fill = $('holdFill');
+  if(fill){
+    // snap back to 0 without animating backwards
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    // force reflow
+    void fill.offsetHeight;
+    fill.style.transition = '';
+  }
+}
+
+function startHold(){
+  const btn = $('curQty');
+  if(!btn) return;
+
+  // prevent re-entry
+  if(holdTimer) return;
+
+  holdFired = false;
+  btn.classList.add('holding');
+
+  const fill = $('holdFill');
+  if(fill){
+    fill.style.width = '0%';
+    // force reflow then animate to 100
+    void fill.offsetHeight;
+    fill.style.width = '100%';
+  }
+
+  holdTimer = setTimeout(()=>{
+    holdFired = true;
+    fireHoldAction();
+  }, HOLD_MS);
+}
+
+function cancelHold(){
+  if(holdTimer){
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+  if(!holdFired){
+    resetHoldUI();
+  }
+}
+
+function fireHoldAction(){
+  // cleanup timer now
+  if(holdTimer){
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+
+  const btn = $('curQty');
+  if(btn){
+    btn.classList.remove('holding');
+    btn.classList.add('success');
+  }
+
+  // small haptic if available
+  try { navigator.vibrate && navigator.vibrate(12); } catch {}
+
+  const o = currentOrder();
+  if(!o){
+    resetHoldUI();
+    return;
+  }
+
+  rebuildQueue();
+  const done = (queue.length === 0);
+
+  if(done){
+    nextOrder();
+  }else{
+    pickCurrent(); // this auto-advances because queue rebuild filters picked
+  }
+
+  // clear success state shortly after so it doesn't "stick"
+  setTimeout(()=> resetHoldUI(), 160);
+}
+
+// =========================================================
 // BATTERY OPT: Picked cache + debounced storage writes
 // =========================================================
 let pickedCache = null;
@@ -50,7 +142,6 @@ function loadPickedOnce(){
 
 function scheduleSavePicked(){
   if(saveTimer) clearTimeout(saveTimer);
-  // Debounce writes — big battery win on tablets
   saveTimer = setTimeout(()=>{
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pickedCache || {})); } catch {}
     saveTimer = null;
@@ -70,7 +161,7 @@ function setPicked(orderId, key, val){
 }
 
 // =========================================================
-// RENDER BATCHING (prevents double render per tap)
+// RENDER BATCHING
 // =========================================================
 let renderPending = false;
 function requestRender(){
@@ -522,7 +613,7 @@ function buildOrders(rows, lookupMap){
 }
 
 // =========================================================
-// QUEUE + RENDER (LIST BUILDS ONLY ON ORDER CHANGE)
+// QUEUE + RENDER
 // =========================================================
 function currentOrder(){ return orders[orderIndex]; }
 
@@ -566,7 +657,7 @@ function setOrderBar(){
   $('progressRight').textContent = `Total: ${cansLabel(total)}`;
 }
 
-// Build list ONCE per order, then only update classes
+// Build list ONCE per order
 function buildListIfNeeded(){
   const o = currentOrder();
   const body = $('listBody');
@@ -598,7 +689,6 @@ function buildListIfNeeded(){
     const k = row.getAttribute('data-key');
     if(k) listRowElsByKey.set(k, row);
 
-    // IMPORTANT: view-only list (no jumping). Prevent taps from doing anything.
     row.addEventListener('pointerdown', (e)=>killTap(e), { passive:false });
     row.addEventListener('click', (e)=>{ e.preventDefault(); }, { passive:false });
   });
@@ -636,33 +726,40 @@ function setNextCard(item, qtyId, aisleId, imgId){
   }
 }
 
-function setQtyMode(mode, numberText){
+function setQtyMode(mode, numberVal){
   const num = $('curQtyNumber');
   const done = $('curQtyDone');
-  if(!num || !done) return;
+  const top = $('qtyTop');
+  const bot = $('qtyBottom');
+
+  if(!num || !done || !top || !bot) return;
 
   if(mode === 'done'){
-    num.style.display = 'none';
+    // show DONE state
     done.style.display = 'grid';
+    $('qtyStack').style.display = 'none';
   }else{
     done.style.display = 'none';
-    num.style.display = 'block';
-    num.textContent = numberText ?? '—';
+    $('qtyStack').style.display = 'grid';
+
+    const n = Number(numberVal ?? 0) | 0;
+    num.textContent = `${n}`;
+    bot.textContent = (n === 1) ? 'CAN' : 'CANS';
+    top.textContent = 'PICK';
   }
 }
 
 function renderCurrent(){
   const o = currentOrder();
-  const pickBtn = $('btnPickNext');
 
   if(!o){
-    if(pickBtn) pickBtn.style.visibility = 'visible';
     $('curTitle').textContent = 'No orders found';
     $('curSub').textContent = '';
     setQtyMode('qty', '—');
     $('curImg').src = placeholderSvg('No orders');
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
+    resetHoldUI();
     return;
   }
 
@@ -673,8 +770,6 @@ function renderCurrent(){
   const cur = queue[queueIndex];
 
   if(!cur){
-    if(pickBtn) pickBtn.style.visibility = 'hidden';
-
     $('curTitle').textContent = 'ORDER PICKED';
     $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
     $('curImg').src = './done.svg';
@@ -683,10 +778,9 @@ function renderCurrent(){
 
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
+    resetHoldUI();
     return;
   }
-
-  if(pickBtn) pickBtn.style.visibility = 'visible';
 
   $('curTitle').textContent = cur.itemTitle;
 
@@ -699,7 +793,6 @@ function renderCurrent(){
 
   setQtyMode('qty', cur.qtyCans);
 
-  // Battery opt: don’t reset src if identical
   const imgEl = $('curImg');
   if(imgEl && imgEl.dataset.src !== cur.imageResolved){
     imgEl.src = cur.imageResolved;
@@ -708,6 +801,8 @@ function renderCurrent(){
 
   setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
   setNextCard(queue[queueIndex+2], 'n2Qty','n2Aisle','n2Img');
+
+  resetHoldUI();
 }
 
 function renderAllNow(){
@@ -729,7 +824,7 @@ function pickCurrent(){
   // HARD BLOCK: prevent rapid double fire
   if(pickCurrent._lock) return;
   pickCurrent._lock = true;
-  setTimeout(()=>{ pickCurrent._lock = false; }, 120);
+  setTimeout(()=>{ pickCurrent._lock = false; }, 160);
 
   const prev = isPicked(o.orderId, cur.key);
   const prevIndex = queueIndex;
@@ -807,19 +902,6 @@ function resetThisOrder(){
   try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
 }
 
-// Qty pill should ONLY advance when DONE
-function qtyPillClick(e){
-  killTap(e);
-  const o = currentOrder();
-  if(!o) return;
-
-  rebuildQueue();
-  const done = (queue.length === 0);
-  if(!done) return;
-
-  nextOrder();
-}
-
 // =========================================================
 // INIT
 // =========================================================
@@ -834,14 +916,27 @@ async function init(){
 
     $('btnResetOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); resetThisOrder(); }, { passive:false });
 
-    // ONLY PICK BUTTON picks
-    $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
+    // QTY BLOCK = ONLY PICK+NEXT
+    const qtyBtn = $('curQty');
+    qtyBtn?.addEventListener('pointerdown', (e)=>{
       killTap(e);
-      pickCurrent();
+      startHold();
     }, { passive:false });
 
-    // Qty pill: only works when DONE
-    $('curQty')?.addEventListener('pointerdown', (e)=> qtyPillClick(e), { passive:false });
+    qtyBtn?.addEventListener('pointerup', (e)=>{
+      killTap(e);
+      cancelHold();
+    }, { passive:false });
+
+    qtyBtn?.addEventListener('pointercancel', (e)=>{
+      killTap(e);
+      cancelHold();
+    }, { passive:false });
+
+    qtyBtn?.addEventListener('pointerleave', (e)=>{
+      // if finger slides off, cancel
+      cancelHold();
+    }, { passive:true });
 
     // Load all 3 sheets
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
@@ -883,6 +978,7 @@ async function init(){
     $('curImg').src = placeholderSvg('Error');
     setNextCard(null,'n1Qty','n1Aisle','n1Img');
     setNextCard(null,'n2Qty','n2Aisle','n2Img');
+    resetHoldUI();
   }
 }
 
