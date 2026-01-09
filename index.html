@@ -54,22 +54,7 @@
             <div class="title" id="curTitle">Loading…</div>
             <div class="sub" id="curSub">—</div>
           </div>
-
-          <!-- Quantity block is now PICK+NEXT with a 0.4s hold -->
-          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold to pick quantity">
-            <div class="holdFill" id="holdFill" aria-hidden="true"></div>
-
-            <div class="qtyStack" id="qtyStack">
-              <div class="qtyTop" id="qtyTop">PICK</div>
-              <div class="qtyNumber" id="curQtyNumber">—</div>
-              <div class="qtyBottom" id="qtyBottom">CANS</div>
-            </div>
-
-            <div class="qtyDone" id="curQtyDone" style="display:none;">
-              <div class="qtyCheck">✔</div>
-              <div class="qtyNext">NEXT</div>
-            </div>
-          </button>
+          <!-- NOTE: qty button moved out of header to sit beside can -->
         </div>
 
         <div class="heroPick">
@@ -79,8 +64,29 @@
           </div>
 
           <div class="heroSide">
+
+            <!-- HOLD-TO-CONFIRM QTY BUTTON (BESIDE CAN ON TABLET, BELOW CAN ON MOBILE) -->
+            <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold to confirm pick">
+              <!-- optional fill layer if your JS animates it -->
+              <div class="holdFill" id="holdFill" aria-hidden="true"></div>
+
+              <!-- normal mode -->
+              <div class="qtyStack" id="qtyStack">
+                <div class="qtyTop">PICK</div>
+                <div class="qtyNumber" id="curQtyNumber">—</div>
+                <div class="qtyBottom">CANS</div>
+              </div>
+
+              <!-- done mode -->
+              <div class="qtyDone" id="curQtyDone" style="display:none;">
+                <div class="qtyCheck">✔</div>
+                <div class="qtyNext">NEXT</div>
+              </div>
+            </button>
+
             <div class="heroHint strongHint">Hold the red block (0.4s) to confirm</div>
             <div class="heroHint">Image = what. Red block = how many + confirms.</div>
+
           </div>
         </div>
 
