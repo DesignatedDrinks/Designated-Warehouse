@@ -55,9 +55,15 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- Quantity pill (NOT a pick button). When order is DONE it becomes NEXT. -->
-          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Quantity / Next Order">
-            <div class="qtyNumber" id="curQtyNumber">—</div>
+          <!-- Quantity block is now PICK+NEXT with a 0.4s hold -->
+          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold to pick quantity">
+            <div class="holdFill" id="holdFill" aria-hidden="true"></div>
+
+            <div class="qtyStack" id="qtyStack">
+              <div class="qtyTop" id="qtyTop">PICK</div>
+              <div class="qtyNumber" id="curQtyNumber">—</div>
+              <div class="qtyBottom" id="qtyBottom">CANS</div>
+            </div>
 
             <div class="qtyDone" id="curQtyDone" style="display:none;">
               <div class="qtyCheck">✔</div>
@@ -73,9 +79,8 @@
           </div>
 
           <div class="heroSide">
-            <!-- ONLY THIS BUTTON PICKS -->
-            <button id="btnPickNext" class="btn heroNext pickBtn" type="button">PICK →</button>
-            <div class="heroHint">Only this button picks (prevents mis-taps)</div>
+            <div class="heroHint strongHint">Hold the red block (0.4s) to confirm</div>
+            <div class="heroHint">Image = what. Red block = how many + confirms.</div>
           </div>
         </div>
 
