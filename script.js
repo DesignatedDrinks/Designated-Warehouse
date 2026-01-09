@@ -840,7 +840,6 @@ function startHoldAction(e){
     if(done) nextOrder();
     else pickCurrent();
 
-    // reset fill
     setTimeout(()=> holdFillReset(), 80);
     holding = false;
   }, HOLD_MS);
@@ -869,11 +868,8 @@ async function init(){
 
     $('btnResetOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); resetThisOrder(); }, { passive:false });
 
-    // PICK BUTTON picks
-    $('btnPickNext')?.addEventListener('pointerdown', (e)=>{
-      killTap(e);
-      pickCurrent();
-    }, { passive:false });
+    // IMPORTANT: there is NO purple pick button anymore.
+    // If you still have old HTML with #btnPickNext, this will safely do nothing.
 
     // QTY button: hold 0.4s to confirm (pick / next)
     const qtyBtn = $('curQty');
