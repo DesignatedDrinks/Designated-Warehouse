@@ -1,450 +1,985 @@
-:root{
-  --bg:#f6f6f7;
-  --card:#fff;
-  --ink:#111827;
-  --muted:#6b7280;
-  --line:#e5e7eb;
+// =========================================================
+// CONFIG
+// =========================================================
+const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
+const ordersSheetName = 'Orders';
+const lookupSheetName = 'ImageLookup';
 
-  --purple:#5b2fd6;
-  --danger:#ef4444;
+const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
+const varietySheetName = 'Variety Packs';
 
-  --shadow:0 12px 30px rgba(0,0,0,.08);
-  --tap:56px;
-}
+const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
+  .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7');
 
-*{box-sizing:border-box}
+const ordersUrl =
+  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
+const lookupUrl =
+  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(lookupSheetName)}?alt=json&key=${apiKey}`;
+const varietyUrl =
+  `https://sheets.googleapis.com/v4/spreadsheets/${varietySheetId}/values/${encodeURIComponent(varietySheetName)}?alt=json&key=${apiKey}`;
 
-body{
-  margin:0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
-  background:var(--bg);
-  color:var(--ink);
-}
+const $ = (id) => document.getElementById(id);
 
-/* TOP */
-.top{
-  position:sticky;
-  top:0;
-  z-index:50;
-  padding:12px 16px 8px;
-  background:linear-gradient(180deg,#fff 0%, #fff 75%, rgba(255,255,255,0) 100%);
-}
-.topRow{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-}
-.brand{
-  font-weight:1000;
-  letter-spacing:-.02em;
-  font-size:20px;
-  color:var(--purple);
-}
-.brand span{ color:#111827; }
-.orderNav{ display:flex; gap:8px; }
+// =========================================================
+// STATE
+// =========================================================
+let orders = [];
+let orderIndex = 0;
 
-/* BUTTONS */
-.btn{
-  border:0;
-  border-radius:16px;
-  padding:12px 14px;
-  min-height:44px;
-  font-weight:1000;
-  background:var(--purple);
-  color:#fff;
-  cursor:pointer;
-  box-shadow:0 10px 20px rgba(91,47,214,.20);
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-.btn:active{ transform: translateY(1px); }
-.btn.secondary{
-  background:#ede9fe;
-  color:#341a8a;
-  box-shadow:none;
-}
-.btn.danger{
-  background:var(--danger);
-  box-shadow:0 10px 20px rgba(239,68,68,.18);
-}
+let queue = [];
+let queueIndex = 0;
 
-/* ORDER CARD */
-.orderCard{
-  margin-top:8px;
-  background:var(--card);
-  border:1px solid #f0f0f0;
-  border-radius:18px;
-  box-shadow:var(--shadow);
-  overflow:hidden;
-}
-.orderMain{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  padding:10px 12px;
-}
-.whoLine{ font-weight:1000; font-size:12px; }
-.addrLine{ margin-top:1px; color:var(--muted); font-weight:900; font-size:10px; }
+let undoStack = [];
+const STORAGE_KEY = 'dw_picked_queue_v2';
 
-.chips{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-.chip{
-  background:#f3f4f6;
-  border:1px solid var(--line);
-  border-radius:999px;
-  padding:6px 8px;
-  font-weight:1000;
-  font-size:10px;
-}
+// Runtime built
+let VARIETY_PACK_MAP = new Map();
 
-/* BIG TOTAL CANS CHIP */
-.chipTotal{
-  background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
-  border:2px solid #fecdd3;
-  color:#991b1b;
-  font-size:12px;
-  padding:7px 10px;
-}
+// =========================================================
+// HOLD-TO-CONFIRM (0.4s)
+// =========================================================
+const HOLD_MS = 400;
 
-.progressWrap{ padding:0 12px 10px; }
-.progressBar{
-  height:10px;
-  background:#ede9fe;
-  border-radius:999px;
-  overflow:hidden;
-  border:1px solid #e9e3ff;
-}
-.progressFill{
-  height:100%;
-  width:0%;
-  background:linear-gradient(90deg,var(--purple),#6d42e6);
-  border-radius:999px;
-  transition:width .18s ease;
-}
-.progressMeta{
-  margin-top:8px;
-  display:flex;
-  justify-content:space-between;
-  color:var(--muted);
-  font-weight:1000;
-  font-size:11px;
-}
-.progressMeta.single{
-  justify-content:flex-end;
-}
+let holdTimer = null;
+let holdFired = false;
 
-.error{
-  margin:0 12px 10px;
-  padding:10px 10px;
-  border-radius:16px;
-  background:#fff1f2;
-  border:1px solid #fecdd3;
-  color:#9f1239;
-  font-weight:1000;
-}
-
-/* LAYOUT */
-.wrap{ padding:10px 16px 28px; }
-.deck{ display:grid; gap:12px; }
-
-.card{
-  background:var(--card);
-  border:1px solid #f0f0f0;
-  border-radius:22px;
-  box-shadow:var(--shadow);
-  overflow:hidden;
-}
-
-/* CURRENT */
-.current{ padding-bottom:6px; }
-.cardHead{
-  padding:12px 12px 8px;
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-}
-.title{
-  font-weight:1100;
-  font-size:16px;
-  line-height:1.1;
-}
-.sub{
-  margin-top:4px;
-  color:var(--muted);
-  font-weight:950;
-  font-size:12px;
-  display:flex;
-  gap:6px;
-  flex-wrap:wrap;
-}
-.badge{
-  background:#f3f4f6;
-  border:1px solid var(--line);
-  border-radius:999px;
-  padding:6px 8px;
-  font-weight:1000;
-  font-size:11px;
-}
-
-/* HERO */
-.heroPick{
-  display:grid;
-  grid-template-columns: 1fr 170px;
-  gap:12px;
-  padding:0 12px 10px;
-  align-items:stretch;
-}
-.imgWrap{
-  border:1px solid var(--line);
-  border-radius:20px;
-  background:#fff;
-  padding:10px;
-  display:grid;
-  place-items:center;
-}
-.imgWrap img{
-  width:100%;
-  max-width:420px;
-  max-height:38vh;
-  object-fit:contain;
-  border-radius:14px;
-  display:block;
-}
-
-/* HARD BLOCK ANY TAPS ON IMAGE AREAS */
-.noTap{
-  pointer-events:none !important;
-  cursor:default !important;
-  user-select:none !important;
-}
-.noTap img{
-  pointer-events:none !important;
-  user-select:none !important;
-  -webkit-user-drag:none !important;
-}
-
-.heroSide{
-  display:grid;
-  grid-template-rows:auto;
-  gap:8px;
-  align-content:start;
-}
-
-/* MAIN QTY / DONE ACTION */
-.qtyAction{
-  position:relative;
-  width:100%;
-  border-radius:22px;
-  background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
-  border:3px solid #fecdd3;
-  display:grid;
-  place-items:center;
-  padding:10px 10px;
-  cursor:pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  overflow:hidden;
-}
-.qtyAction:active{ transform: translateY(1px); }
-
-/* Prevent iOS text selection + callout while holding */
-.qtyAction,
-.qtyAction *{
-  -webkit-user-select:none;
-  user-select:none;
-  -webkit-touch-callout:none;
-}
-
-/* Optional fill layer for hold animation (if your JS uses it) */
-.holdFill{
-  position:absolute;
-  inset:0;
-  border-radius:18px;
-  transform:scaleX(0);
-  transform-origin:left center;
-  opacity:.25;
-  background:#dc2626;
-  pointer-events:none;
-}
-
-/* BIG NUMBER */
-.qtyNumber{
-  position:relative;
-  font-weight:1200;
-  color:#dc2626;
-  line-height:1;
-}
-
-/* DONE state */
-.qtyDone{
-  position:relative;
-  display:grid;
-  place-items:center;
-  gap:4px;
-}
-.qtyCheck{
-  font-size:34px;
-  font-weight:1200;
-  color:#000;
-  line-height:1;
-}
-.qtyNext{
-  font-size:12px;
-  font-weight:1100;
-  letter-spacing:.08em;
-  color:#000;
-}
-
-/* NEXT PREVIEW (VIEW ONLY) */
-.nextRow{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-  padding:0 12px 10px;
-}
-.nextCard{
-  background:#fff;
-  border:1px solid #f0f0f0;
-  border-radius:18px;
-  padding:10px;
-  box-shadow:var(--shadow);
-}
-
-.miniTop{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:6px;
-  gap:8px;
-}
-.miniQty{
-  font-weight:1200;
-  font-size:16px;
-  border-radius:12px;
-  padding:8px 10px;
-}
-.miniQtyRed{
-  background:linear-gradient(180deg,#fff1f2 0%, #ffe4e6 100%);
-  border:2px solid #fecdd3;
-  color:#dc2626;
-}
-
-.miniAisle{
-  font-size:11px;
-  font-weight:1000;
-  color:var(--muted);
-  background:#f3f4f6;
-  border:1px solid var(--line);
-  border-radius:999px;
-  padding:6px 10px;
-}
-
-.miniThumb{
-  min-height:90px;
-  display:grid;
-  place-items:center;
-}
-.miniThumb img{
-  width:100%;
-  max-width:160px;
-  height:auto;
-  border-radius:12px;
-  display:block;
-}
-
-/* ACTIONS */
-.actions{ padding:0 12px 12px; display:grid; gap:10px; }
-.btn.big{
-  width:100%;
-  min-height:var(--tap);
-  border-radius:18px;
-  font-size:16px;
-}
-.row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-
-/* LIST */
-.listWrap{
-  background:#fafafa;
-  border:1px solid var(--line);
-  border-radius:20px;
-  overflow:hidden;
-}
-.listHeader{
-  padding:10px 12px;
-  display:flex;
-  justify-content:space-between;
-  border-bottom:1px solid var(--line);
-  gap:10px;
-}
-.listTitle{ font-weight:1100; }
-.listHint{ font-size:11px; color:var(--muted); font-weight:950; }
-.listBody{ max-height:320px; overflow:auto; }
-
-.listRow{
-  display:grid;
-  grid-template-columns:1fr auto;
-  gap:10px;
-  padding:12px;
-  border-bottom:1px solid var(--line);
-  background:#fff;
-}
-.listRow:last-child{ border-bottom:0; }
-.listRow.done{ opacity:.55; background:#f9fafb; }
-.listRow .lTitle{ font-weight:1050; font-size:13px; line-height:1.15; }
-.listRow .lSub{ margin-top:5px; color:var(--muted); font-weight:950; font-size:12px; }
-.listRow .lQty{
-  align-self:center;
-  font-weight:1200;
-  font-size:20px;
-  color:#111827;
-}
-
-/* LIST FOOTER RESET */
-.listFooter{
-  padding:12px;
-  border-top:1px solid var(--line);
-  background:#fff;
-  display:grid;
-  gap:8px;
-}
-.resetHint{
-  font-size:11px;
-  color:var(--muted);
-  font-weight:950;
-  line-height:1.2;
-}
-
-/* =========================
-   RESPONSIVE POSITIONING
-   ========================= */
-
-/* MOBILE: stack image then button under it (and make it BIG) */
-@media (max-width: 640px){
-  .heroPick{ grid-template-columns:1fr; }
-  .qtyAction{
-    height:110px;
-    margin-top:10px;
+function resetHoldUI(){
+  const btn = $('curQty');
+  if(!btn) return;
+  btn.classList.remove('holding','success');
+  const fill = $('holdFill');
+  if(fill){
+    // snap back to 0 without animating backwards
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    // force reflow
+    void fill.offsetHeight;
+    fill.style.transition = '';
   }
-  .qtyNumber{ font-size:56px; }
 }
 
-/* TABLET+: BIGGER button beside the can */
-@media (min-width: 641px){
-  .heroPick{
-    grid-template-columns: 1fr 220px; /* wider side */
-    gap: 12px;
+function startHold(){
+  const btn = $('curQty');
+  if(!btn) return;
+
+  // prevent re-entry
+  if(holdTimer) return;
+
+  holdFired = false;
+  btn.classList.add('holding');
+
+  const fill = $('holdFill');
+  if(fill){
+    fill.style.width = '0%';
+    // force reflow then animate to 100
+    void fill.offsetHeight;
+    fill.style.width = '100%';
   }
-  .qtyAction{
-    height:150px;              /* BIG */
-    border-radius:26px;
-    border-width:4px;
-  }
-  .qtyNumber{ font-size:72px; } /* BIG number */
+
+  holdTimer = setTimeout(()=>{
+    holdFired = true;
+    fireHoldAction();
+  }, HOLD_MS);
 }
 
-/* LARGE TABLET / DESKTOP (optional extra punch) */
-@media (min-width: 900px){
-  .heroPick{ grid-template-columns: 1fr 260px; }
-  .qtyAction{ height:170px; }
-  .qtyNumber{ font-size:80px; }
+function cancelHold(){
+  if(holdTimer){
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+  if(!holdFired){
+    resetHoldUI();
+  }
 }
+
+function fireHoldAction(){
+  // cleanup timer now
+  if(holdTimer){
+    clearTimeout(holdTimer);
+    holdTimer = null;
+  }
+
+  const btn = $('curQty');
+  if(btn){
+    btn.classList.remove('holding');
+    btn.classList.add('success');
+  }
+
+  // small haptic if available
+  try { navigator.vibrate && navigator.vibrate(12); } catch {}
+
+  const o = currentOrder();
+  if(!o){
+    resetHoldUI();
+    return;
+  }
+
+  rebuildQueue();
+  const done = (queue.length === 0);
+
+  if(done){
+    nextOrder();
+  }else{
+    pickCurrent(); // this auto-advances because queue rebuild filters picked
+  }
+
+  // clear success state shortly after so it doesn't "stick"
+  setTimeout(()=> resetHoldUI(), 160);
+}
+
+// =========================================================
+// BATTERY OPT: Picked cache + debounced storage writes
+// =========================================================
+let pickedCache = null;
+let saveTimer = null;
+
+function loadPickedOnce(){
+  if(pickedCache) return pickedCache;
+  try { pickedCache = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+  catch { pickedCache = {}; }
+  return pickedCache;
+}
+
+function scheduleSavePicked(){
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pickedCache || {})); } catch {}
+    saveTimer = null;
+  }, 250);
+}
+
+function isPicked(orderId, key){
+  const p = loadPickedOnce();
+  return !!(p[orderId] && p[orderId][key]);
+}
+
+function setPicked(orderId, key, val){
+  const p = loadPickedOnce();
+  if(!p[orderId]) p[orderId] = {};
+  p[orderId][key] = !!val;
+  scheduleSavePicked();
+}
+
+// =========================================================
+// RENDER BATCHING
+// =========================================================
+let renderPending = false;
+function requestRender(){
+  if(renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(()=>{
+    renderPending = false;
+    renderAllNow();
+  });
+}
+
+// =========================================================
+// UTILS
+// =========================================================
+function safe(v){ return (v ?? '').toString().trim(); }
+
+function setError(msg){
+  const box = $('errBox');
+  if(!box) return;
+  box.innerHTML = msg ? `<div class="error">${msg}</div>` : '';
+}
+
+function normalizeText(s){
+  return safe(s).toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function itemKeyByTitle(itemTitle){ return normalizeText(itemTitle); }
+
+function toIntQty(x){
+  const n = parseInt(safe(x).replace(/[^\d-]/g,''), 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseBool(x){
+  const v = safe(x).toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
+
+function escapeHtml(str){
+  return (str ?? '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+
+function cansLabel(n){
+  const num = Math.max(0, n|0);
+  return `${num} ${num === 1 ? 'can' : 'cans'}`;
+}
+
+// Kill accidental double-tap / zoom / ghost clicks
+function killTap(e){
+  if(!e) return;
+  try { e.preventDefault(); } catch {}
+  try { e.stopPropagation(); } catch {}
+}
+
+function formatCustomerNameHTML(full){
+  const n = safe(full);
+  if(!n) return '—';
+  const parts = n.split(/\s+/).filter(Boolean);
+  if(parts.length < 2) return escapeHtml(n);
+  const last = parts.pop();
+  return `${escapeHtml(parts.join(' '))} <strong>${escapeHtml(last)}</strong>`;
+}
+
+function cityProvince(address){
+  const a = safe(address);
+  if(!a) return '—';
+  const parts = a.split(',').map(x => x.trim()).filter(Boolean);
+  if(parts.length >= 3) return `${parts[1]}, ${parts[2]}`;
+  if(parts.length >= 2) return parts.slice(-2).join(', ');
+  return a;
+}
+
+function placeholderSvg(title){
+  const t = safe(title).slice(0,28);
+  return `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320">
+      <rect width="100%" height="100%" fill="#f3f4f6"/>
+      <text x="50%" y="48%" text-anchor="middle" font-family="Arial" font-size="18" fill="#6b7280" font-weight="700">NO IMAGE</text>
+      <text x="50%" y="58%" text-anchor="middle" font-family="Arial" font-size="12" fill="#9ca3af" font-weight="700">${t}</text>
+    </svg>
+  `);
+}
+
+function resolveImage(url, title){
+  const u = safe(url);
+  if(u && u.startsWith('http')) return u;
+  return placeholderSvg(title);
+}
+
+async function fetchJson(url){
+  const res = await fetch(url, { cache: 'no-store' });
+  const text = await res.text();
+  if(!res.ok) throw new Error(`Fetch failed: ${res.status}\n${text}`);
+  try { return JSON.parse(text); }
+  catch { throw new Error(`Invalid JSON from Sheets API:\n${text.slice(0,500)}`); }
+}
+
+// =========================================================
+// PACK SIZE PARSING (packs -> cans)
+// =========================================================
+function parsePackSize(itemTitle, variantTitle){
+  const s = `${safe(itemTitle)} ${safe(variantTitle)}`.toLowerCase();
+  if(/\bsingle\b/.test(s) || /\bcan\b/.test(s) || /\b1 pack\b/.test(s)) return 1;
+
+  const m1 = s.match(/(\d+)\s*[- ]?\s*(pack|pk)\b/);
+  if(m1) return clampPack(parseInt(m1[1], 10));
+
+  const m2 = s.match(/\b(\d+)\s*x\s*\d+/);
+  if(m2) return clampPack(parseInt(m2[1], 10));
+
+  const m3 = s.match(/\bcase\s*\(\s*(\d+)\s*x/i);
+  if(m3) return clampPack(parseInt(m3[1], 10));
+
+  const m4 = safe(variantTitle).trim().match(/^(\d{1,3})$/);
+  if(m4) return clampPack(parseInt(m4[1], 10));
+
+  return 1;
+}
+
+function clampPack(n){
+  if(!Number.isFinite(n) || n <= 0) return 1;
+  if(n > 60) return 1;
+  return n;
+}
+
+function formatSourceBreakdown(sources){
+  const map = new Map();
+  for(const src of sources){
+    const p = src.packSize || 1;
+    map.set(p, (map.get(p) || 0) + (src.units || 0));
+  }
+  const parts = Array.from(map.entries())
+    .sort((a,b)=> b[0] - a[0])
+    .map(([pack, units]) => `${units}×${pack}`);
+  return parts.join(' + ');
+}
+
+// =========================================================
+// LOCATION SORTING
+// =========================================================
+function parseLocCode(locCode){
+  const s = safe(locCode).toUpperCase();
+  if(!s) return null;
+
+  let m = s.match(/^B-([NS])-(\d{1,2})$/);
+  if(m){
+    const side = m[1];
+    const n = parseInt(m[2],10);
+    if(!Number.isFinite(n)) return null;
+    const sideOrder = (side === 'N') ? 0 : 1;
+    return { zone:'B', idx:n, side, sortKey: [1, n, sideOrder] };
+  }
+
+  m = s.match(/^A-(\d{1,2})$/);
+  if(m){
+    const n = parseInt(m[1],10);
+    if(!Number.isFinite(n)) return null;
+    return { zone:'A', idx:n, side:'', sortKey: [2, -n, 0] };
+  }
+
+  return { zone:'?', idx:999, side:'', sortKey: [99, 999, 0] };
+}
+
+function locLabel(locCode){
+  const s = safe(locCode);
+  return s || '—';
+}
+
+// =========================================================
+// PARSE SHEET HELPERS
+// =========================================================
+function buildHeaderMap(headerRow){
+  const map = {};
+  (headerRow || []).forEach((h, idx)=> map[normalizeText(h)] = idx);
+  return map;
+}
+
+function pickHeader(hmap, candidates){
+  for(const c of candidates){
+    const k = normalizeText(c);
+    if(k in hmap) return hmap[k];
+  }
+  return null;
+}
+
+function mustHaveHeadersOrders(hmap){
+  const req = ['orderid','itemtitle','qty'];
+  const missing = req.filter(k => !(k in hmap));
+  if(missing.length) throw new Error(`Orders sheet missing required headers: ${missing.join(', ')}`);
+}
+
+// =========================================================
+// VARIETY PACK EXPANSION
+// =========================================================
+function stripVendorPrefix(title){
+  const t = safe(title);
+  const m = t.match(/^\s*.*?\)\s*(.+)$/);
+  return m ? safe(m[1]) : t;
+}
+
+function normalizePackTitle(title){
+  let t = safe(title);
+  t = stripVendorPrefix(t);
+  t = t.replace(/[–—]/g, '-');
+  t = t.replace(/(\b\d+\s*pack\b)\s*-\s*\1\b\s*$/i, '$1');
+  t = t.replace(/\s*-\s*\d+\s*pack\b\s*$/i, '');
+  return normalizeText(t);
+}
+
+function buildVarietyPackMap(values){
+  const out = new Map();
+  if(!values || values.length < 2) return out;
+
+  const hmap = buildHeaderMap(values[0]);
+  const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
+  const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
+  const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
+
+  if(colPack == null || colBeer == null) return out;
+
+  for(const row of values.slice(1)){
+    const packTitleRaw = safe(row[colPack] ?? '');
+    const beerTitle = safe(row[colBeer] ?? '');
+    if(!packTitleRaw || !beerTitle) continue;
+
+    let qty = 1;
+    if(colQty != null){
+      const q = toIntQty(row[colQty]);
+      qty = Number.isFinite(q) && q > 0 ? q : 1;
+    }
+
+    const keyPack = normalizePackTitle(packTitleRaw);
+    const record = out.get(keyPack) || { packTitle: packTitleRaw, components: [] };
+    record.packTitle = record.packTitle || packTitleRaw;
+    record.components.push({ title: beerTitle, qty });
+    out.set(keyPack, record);
+  }
+
+  return out;
+}
+
+function findVarietyPackRule(itemTitle){
+  return VARIETY_PACK_MAP.get(normalizePackTitle(itemTitle)) || null;
+}
+
+function expandVarietyPackRow(r){
+  const rule = findVarietyPackRule(r.itemTitle);
+  if(!rule) return [r];
+
+  const out = [];
+  const packCount = Math.max(1, r.units || 1);
+
+  for(const c of (rule.components || [])){
+    const perPack = Math.max(1, toIntQty(c.qty));
+    const qtyUnits = perPack * packCount;
+    if(qtyUnits <= 0) continue;
+
+    out.push({
+      ...r,
+      itemTitle: c.title,
+      variantTitle: 'Single',
+      units: qtyUnits,
+      packSize: 1,
+      cans: qtyUnits,
+    });
+  }
+
+  return out.length ? out : [r];
+}
+
+// =========================================================
+// ORDERS ROW PARSING
+// =========================================================
+function rowToOrderObj(row, hmap){
+  const idxOrderId = pickHeader(hmap, ['orderid','order id','id']);
+  const idxCust    = pickHeader(hmap, ['customername','customer name','customer']);
+  const idxAddr    = pickHeader(hmap, ['address','shipping address','ship address']);
+  const idxItem    = pickHeader(hmap, ['itemtitle','item title','title','product']);
+  const idxVar     = pickHeader(hmap, ['varianttitle','variant title','variant']);
+  const idxQty     = pickHeader(hmap, ['qty','quantity','q']);
+  const idxPicked  = pickHeader(hmap, ['picked','is picked']);
+  const idxNotes   = pickHeader(hmap, ['notes','note']);
+  const idxImg     = pickHeader(hmap, ['imageurl','image url','img']);
+
+  const itemTitle = safe(row[idxItem] ?? '');
+  const variantTitle = safe(row[idxVar] ?? '');
+  const units = toIntQty(row[idxQty] ?? '');
+  const packSize = parsePackSize(itemTitle, variantTitle);
+  const cans = units * packSize;
+
+  const r = {
+    orderId: safe(row[idxOrderId] ?? ''),
+    customerName: safe(row[idxCust] ?? ''),
+    address: safe(row[idxAddr] ?? ''),
+    itemTitle,
+    variantTitle,
+    units,
+    packSize,
+    cans,
+    picked: parseBool(row[idxPicked] ?? ''),
+    notes: safe(row[idxNotes] ?? ''),
+    imageUrl: safe(row[idxImg] ?? ''),
+  };
+
+  if(!r.orderId && !r.itemTitle && !r.customerName) return null;
+  if(normalizeText(r.itemTitle) === 'itemtitle') return null;
+  return r;
+}
+
+function buildLookupMap(values){
+  if(!values || values.length < 2) return new Map();
+
+  const hmap = buildHeaderMap(values[0]);
+  const idxTitle = pickHeader(hmap, ['itemtitle','item title','title','product']);
+  const idxImg   = pickHeader(hmap, ['imageurl','image url','img','beer image url']);
+  const idxLoc   = pickHeader(hmap, ['loccode','loc code','location','bin','aisle']);
+
+  if(idxTitle == null) throw new Error('ImageLookup sheet missing required header: itemTitle');
+
+  const out = new Map();
+  for(const row of values.slice(1)){
+    const itemTitle = safe(row[idxTitle] ?? '');
+    if(!itemTitle) continue;
+
+    const key = itemKeyByTitle(itemTitle);
+    const imageUrl = idxImg != null ? safe(row[idxImg] ?? '') : '';
+    const locCode  = idxLoc != null ? safe(row[idxLoc] ?? '') : '';
+    out.set(key, { imageUrl, locCode, rawTitle: itemTitle });
+  }
+  return out;
+}
+
+// =========================================================
+// BOX BREAKDOWN (24 / 12 / 6)
+// =========================================================
+function boxBreakdown(totalCans){
+  let n = Math.max(0, totalCans|0);
+  const out = { b24:0, b12:0, b6:0 };
+
+  out.b24 = Math.floor(n / 24);
+  n = n % 24;
+
+  if(n === 0) return out;
+  if(n <= 6){ out.b6 = 1; return out; }
+  if(n <= 12){ out.b12 = 1; return out; }
+
+  out.b24 += 1;
+  return out;
+}
+
+function boxLabel(totalCans){
+  const b = boxBreakdown(totalCans);
+  const parts = [];
+  if(b.b24) parts.push(`${b.b24}×24`);
+  if(b.b12) parts.push(`${b.b12}×12`);
+  if(b.b6)  parts.push(`${b.b6}×6`);
+  if(!parts.length) parts.push('0');
+  return parts.join(' + ');
+}
+
+// =========================================================
+// BUILD ORDERS
+// =========================================================
+function buildOrders(rows, lookupMap){
+  const byOrder = new Map();
+
+  for(const r of rows){
+    if(!r.orderId) continue;
+    if(!byOrder.has(r.orderId)){
+      byOrder.set(r.orderId, {
+        orderId: r.orderId,
+        customerName: r.customerName,
+        address: r.address,
+        notes: r.notes,
+        itemsRaw: []
+      });
+    }
+    byOrder.get(r.orderId).itemsRaw.push(r);
+  }
+
+  const out = [];
+  for(const o of byOrder.values()){
+    const merged = new Map();
+
+    for(const r0 of o.itemsRaw){
+      const expandedRows = expandVarietyPackRow(r0);
+
+      for(const r of expandedRows){
+        if(!r.itemTitle) continue;
+        if(r.cans <= 0) continue;
+
+        const k = itemKeyByTitle(r.itemTitle);
+        const lu = lookupMap.get(k);
+
+        if(!merged.has(k)){
+          const loc = lu?.locCode ? parseLocCode(lu.locCode) : null;
+          const imgCandidate = lu?.imageUrl || r.imageUrl;
+          const imgResolved = resolveImage(imgCandidate, r.itemTitle);
+
+          merged.set(k, {
+            key: k,
+            itemTitle: r.itemTitle,
+            qtyCans: 0,
+            locCode: lu?.locCode || '',
+            locSort: loc?.sortKey || [99,999,0],
+            imageResolved: imgResolved,
+            sources: []
+          });
+        }
+
+        const item = merged.get(k);
+        const candidate = (lookupMap.get(k)?.imageUrl || r.imageUrl || '');
+
+        if(item.imageResolved.startsWith('data:image') && safe(candidate).startsWith('http')){
+          item.imageResolved = candidate;
+        }
+
+        item.qtyCans += r.cans;
+        item.sources.push({ units: r.units, packSize: r.packSize, cans: r.cans });
+      }
+    }
+
+    const items = Array.from(merged.values()).sort((a,b)=>{
+      const as = a.locSort, bs = b.locSort;
+      for(let i=0;i<Math.max(as.length, bs.length);i++){
+        const av = as[i] ?? 0;
+        const bv = bs[i] ?? 0;
+        if(av !== bv) return av - bv;
+      }
+      return a.itemTitle.localeCompare(b.itemTitle);
+    });
+
+    out.push({
+      orderId: o.orderId,
+      customerName: o.customerName,
+      address: o.address,
+      notes: o.notes,
+      items
+    });
+  }
+
+  out.sort((a,b)=> (a.orderId > b.orderId ? -1 : 1));
+  return out;
+}
+
+// =========================================================
+// QUEUE + RENDER
+// =========================================================
+function currentOrder(){ return orders[orderIndex]; }
+
+let listBuiltForOrderId = null;
+const listRowElsByKey = new Map();
+
+function rebuildQueue(){
+  const o = currentOrder();
+  if(!o) { queue=[]; queueIndex=0; return; }
+  queue = o.items.filter(it => !isPicked(o.orderId, it.key));
+  if(queueIndex < 0) queueIndex = 0;
+  if(queueIndex > queue.length - 1) queueIndex = Math.max(0, queue.length - 1);
+}
+
+function totalsForOrder(o){
+  const total = o.items.reduce((s,it)=> s + it.qtyCans, 0);
+  const picked = o.items.reduce((s,it)=> s + (isPicked(o.orderId, it.key) ? it.qtyCans : 0), 0);
+  return { total, picked };
+}
+
+function setOrderBar(){
+  const o = currentOrder();
+  const card = $('orderCard');
+  if(!card) return;
+
+  if(!o){ card.style.display='none'; return; }
+  card.style.display='block';
+
+  const { total, picked } = totalsForOrder(o);
+  const pct = total ? Math.round((picked/total)*100) : 0;
+
+  $('whoLine').innerHTML = `${formatCustomerNameHTML(o.customerName)} · ${escapeHtml(cityProvince(o.address))}`;
+  $('addrLine').textContent = safe(o.address) || '—';
+
+  $('chipOrder').textContent = `#${o.orderId}`;
+  $('chipTotalCans').textContent = `Total: ${cansLabel(total)}`;
+  $('chipBoxes').textContent = `Boxes: ${boxLabel(total)}`;
+  $('chipProgress').textContent = `${pct}%`;
+
+  $('progressFill').style.width = `${pct}%`;
+  $('progressRight').textContent = `Total: ${cansLabel(total)}`;
+}
+
+// Build list ONCE per order
+function buildListIfNeeded(){
+  const o = currentOrder();
+  const body = $('listBody');
+  if(!body) return;
+
+  if(!o){ body.innerHTML=''; listBuiltForOrderId=null; listRowElsByKey.clear(); return; }
+
+  if(listBuiltForOrderId === o.orderId) return;
+
+  listBuiltForOrderId = o.orderId;
+  listRowElsByKey.clear();
+
+  body.innerHTML = o.items.map((it)=>{
+    const done = isPicked(o.orderId, it.key);
+    const src = it.sources?.length ? ` · ${escapeHtml(formatSourceBreakdown(it.sources))}` : '';
+    const loc = it.locCode ? ` · <strong>${escapeHtml(locLabel(it.locCode))}</strong>` : '';
+    return `
+      <div class="listRow ${done ? 'done' : ''}" data-key="${it.key}">
+        <div>
+          <div class="lTitle">${escapeHtml(it.itemTitle)}</div>
+          <div class="lSub">${loc}${src}</div>
+        </div>
+        <div class="lQty">${it.qtyCans}</div>
+      </div>
+    `;
+  }).join('');
+
+  body.querySelectorAll('.listRow').forEach(row=>{
+    const k = row.getAttribute('data-key');
+    if(k) listRowElsByKey.set(k, row);
+
+    row.addEventListener('pointerdown', (e)=>killTap(e), { passive:false });
+    row.addEventListener('click', (e)=>{ e.preventDefault(); }, { passive:false });
+  });
+}
+
+function updateListDoneState(key){
+  const o = currentOrder();
+  if(!o) return;
+  const row = listRowElsByKey.get(key);
+  if(!row) return;
+  row.classList.toggle('done', isPicked(o.orderId, key));
+}
+
+function setNextCard(item, qtyId, aisleId, imgId){
+  const q = $(qtyId), a = $(aisleId), im = $(imgId);
+  if(!q || !a || !im) return;
+
+  if(!item){
+    q.textContent = '—';
+    a.textContent = '—';
+    if(im.dataset.src !== 'placeholder'){
+      im.src = placeholderSvg('—');
+      im.dataset.src = 'placeholder';
+    }
+    return;
+  }
+
+  q.textContent = cansLabel(item.qtyCans);
+  a.textContent = item.locCode ? locLabel(item.locCode) : '—';
+
+  const nextSrc = item.imageResolved;
+  if(im.dataset.src !== nextSrc){
+    im.src = nextSrc;
+    im.dataset.src = nextSrc;
+  }
+}
+
+function setQtyMode(mode, numberVal){
+  const num = $('curQtyNumber');
+  const done = $('curQtyDone');
+  const top = $('qtyTop');
+  const bot = $('qtyBottom');
+
+  if(!num || !done || !top || !bot) return;
+
+  if(mode === 'done'){
+    // show DONE state
+    done.style.display = 'grid';
+    $('qtyStack').style.display = 'none';
+  }else{
+    done.style.display = 'none';
+    $('qtyStack').style.display = 'grid';
+
+    const n = Number(numberVal ?? 0) | 0;
+    num.textContent = `${n}`;
+    bot.textContent = (n === 1) ? 'CAN' : 'CANS';
+    top.textContent = 'PICK';
+  }
+}
+
+function renderCurrent(){
+  const o = currentOrder();
+
+  if(!o){
+    $('curTitle').textContent = 'No orders found';
+    $('curSub').textContent = '';
+    setQtyMode('qty', '—');
+    $('curImg').src = placeholderSvg('No orders');
+    setNextCard(null,'n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Qty','n2Aisle','n2Img');
+    resetHoldUI();
+    return;
+  }
+
+  rebuildQueue();
+  setOrderBar();
+  buildListIfNeeded();
+
+  const cur = queue[queueIndex];
+
+  if(!cur){
+    $('curTitle').textContent = 'ORDER PICKED';
+    $('curSub').innerHTML = `<span class="badge">Grab boxes: ${escapeHtml(boxLabel(totalsForOrder(o).total))}</span>`;
+    $('curImg').src = './done.svg';
+
+    setQtyMode('done');
+
+    setNextCard(null,'n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Qty','n2Aisle','n2Img');
+    resetHoldUI();
+    return;
+  }
+
+  $('curTitle').textContent = cur.itemTitle;
+
+  const srcText = cur.sources?.length ? formatSourceBreakdown(cur.sources) : '';
+  const locText = cur.locCode ? locLabel(cur.locCode) : '—';
+
+  $('curSub').innerHTML =
+    `<span class="badge">${escapeHtml(locText)}</span>` +
+    (srcText ? `<span class="badge">${escapeHtml(srcText)}</span>` : '');
+
+  setQtyMode('qty', cur.qtyCans);
+
+  const imgEl = $('curImg');
+  if(imgEl && imgEl.dataset.src !== cur.imageResolved){
+    imgEl.src = cur.imageResolved;
+    imgEl.dataset.src = cur.imageResolved;
+  }
+
+  setNextCard(queue[queueIndex+1], 'n1Qty','n1Aisle','n1Img');
+  setNextCard(queue[queueIndex+2], 'n2Qty','n2Aisle','n2Img');
+
+  resetHoldUI();
+}
+
+function renderAllNow(){
+  setError('');
+  renderCurrent();
+}
+
+// =========================================================
+// ACTIONS
+// =========================================================
+function pickCurrent(){
+  const o = currentOrder();
+  if(!o) return;
+
+  rebuildQueue();
+  const cur = queue[queueIndex];
+  if(!cur) return;
+
+  // HARD BLOCK: prevent rapid double fire
+  if(pickCurrent._lock) return;
+  pickCurrent._lock = true;
+  setTimeout(()=>{ pickCurrent._lock = false; }, 160);
+
+  const prev = isPicked(o.orderId, cur.key);
+  const prevIndex = queueIndex;
+
+  setPicked(o.orderId, cur.key, true);
+  undoStack.push({ orderId:o.orderId, key:cur.key, prevValue:prev, prevQueueIndex:prevIndex });
+
+  updateListDoneState(cur.key);
+  requestRender();
+}
+
+function skipCurrent(){
+  rebuildQueue();
+  if(queue.length === 0) return;
+  queueIndex = Math.min(queueIndex + 1, queue.length - 1);
+  requestRender();
+}
+
+function undoLast(){
+  const u = undoStack.pop();
+  if(!u) return;
+
+  setPicked(u.orderId, u.key, u.prevValue);
+
+  const o = currentOrder();
+  if(o && o.orderId === u.orderId){
+    rebuildQueue();
+    const pos = queue.findIndex(q => q.key === u.key);
+    queueIndex = pos >= 0 ? pos : Math.min(u.prevQueueIndex, Math.max(0, queue.length - 1));
+  }
+
+  updateListDoneState(u.key);
+  requestRender();
+}
+
+function prevOrder(){
+  if(orderIndex > 0){
+    orderIndex--;
+    queueIndex = 0;
+    undoStack = [];
+    listBuiltForOrderId = null;
+    requestRender();
+  }
+}
+
+function nextOrder(){
+  if(orderIndex < orders.length - 1){
+    orderIndex++;
+    queueIndex = 0;
+    undoStack = [];
+    listBuiltForOrderId = null;
+    requestRender();
+  }
+}
+
+function resetThisOrder(){
+  const o = currentOrder();
+  if(!o) return;
+
+  const { total, picked } = totalsForOrder(o);
+  const ok = confirm(
+    `Reset picked progress for Order #${o.orderId}?\n\nCustomer: ${o.customerName}\nProgress: ${picked}/${total}\n\nThis clears picked status on this device only (does not change the sheet).`
+  );
+  if(!ok) return;
+
+  const p = loadPickedOnce();
+  delete p[o.orderId];
+  scheduleSavePicked();
+
+  undoStack = [];
+  queueIndex = 0;
+  listBuiltForOrderId = null;
+
+  requestRender();
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+}
+
+// =========================================================
+// INIT
+// =========================================================
+async function init(){
+  try{
+    // Buttons
+    $('btnSkip')?.addEventListener('pointerdown', (e)=>{ killTap(e); skipCurrent(); }, { passive:false });
+    $('btnUndo')?.addEventListener('pointerdown', (e)=>{ killTap(e); undoLast(); }, { passive:false });
+
+    $('btnPrevOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); prevOrder(); }, { passive:false });
+    $('btnNextOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); nextOrder(); }, { passive:false });
+
+    $('btnResetOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); resetThisOrder(); }, { passive:false });
+
+    // QTY BLOCK = ONLY PICK+NEXT
+    const qtyBtn = $('curQty');
+    qtyBtn?.addEventListener('pointerdown', (e)=>{
+      killTap(e);
+      startHold();
+    }, { passive:false });
+
+    qtyBtn?.addEventListener('pointerup', (e)=>{
+      killTap(e);
+      cancelHold();
+    }, { passive:false });
+
+    qtyBtn?.addEventListener('pointercancel', (e)=>{
+      killTap(e);
+      cancelHold();
+    }, { passive:false });
+
+    qtyBtn?.addEventListener('pointerleave', (e)=>{
+      // if finger slides off, cancel
+      cancelHold();
+    }, { passive:true });
+
+    // Load all 3 sheets
+    const [ordersJson, lookupJson, varietyJson] = await Promise.all([
+      fetchJson(ordersUrl),
+      fetchJson(lookupUrl),
+      fetchJson(varietyUrl),
+    ]);
+
+    const ordersValues = ordersJson.values || [];
+    if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
+
+    const lookupValues = lookupJson.values || [];
+    const varietyValues = varietyJson.values || [];
+
+    if(varietyValues.length >= 2){
+      VARIETY_PACK_MAP = buildVarietyPackMap(varietyValues);
+    }else{
+      VARIETY_PACK_MAP = new Map();
+    }
+
+    const lookupMap = (lookupValues.length >= 2) ? buildLookupMap(lookupValues) : new Map();
+
+    const hmap = buildHeaderMap(ordersValues[0]);
+    mustHaveHeadersOrders(hmap);
+
+    const rows = ordersValues.slice(1).map(r => rowToOrderObj(r, hmap)).filter(Boolean);
+    orders = buildOrders(rows, lookupMap);
+
+    if(!orders.length){
+      setError('No valid orders built. Check orderId + itemTitle + qty columns.');
+    }
+
+    requestRender();
+  }catch(e){
+    setError(e.message);
+    $('curTitle').textContent = 'Error';
+    $('curSub').textContent = 'Fix the sheet and reload.';
+    setQtyMode('qty','—');
+    $('curImg').src = placeholderSvg('Error');
+    setNextCard(null,'n1Qty','n1Aisle','n1Img');
+    setNextCard(null,'n2Qty','n2Aisle','n2Img');
+    resetHoldUI();
+  }
+}
+
+init();
