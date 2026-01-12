@@ -2,7 +2,11 @@
 // CONFIG
 // =========================================================
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
-const ordersSheetName = 'Orders';
+
+// ✅ Both sheets (toggleable)
+const ORDERS_SHEET_MAIN  = 'Orders';
+const ORDERS_SHEET_OTHER = 'Orders_Other';
+
 const lookupSheetName = 'ImageLookup';
 
 const varietySheetId   = '1TtRNmjsgC64jbkptnCdklBf_HqifwE9SQO2JlGrp4Us';
@@ -11,8 +15,6 @@ const varietySheetName = 'Variety Packs';
 const apiKey    = 'AIzaSyA7sSHMaY7sSHMaY7i-uxxynKewHLsHxP_dd3TZ4U'
   .replace('AIzaSyA7sSHMaY7sSHMaY7','AIzaSyA7sSHMaY7');
 
-const ordersUrl =
-  `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(ordersSheetName)}?alt=json&key=${apiKey}`;
 const lookupUrl =
   `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(lookupSheetName)}?alt=json&key=${apiKey}`;
 const varietyUrl =
@@ -22,6 +24,67 @@ const $ = (id) => document.getElementById(id);
 
 // Hold-to-confirm timing
 const HOLD_MS = 400;
+
+// =========================================================
+// SHEET TOGGLE (NEW)
+// =========================================================
+const SHEET_STORAGE_KEY = 'dw_active_sheet_v1';
+
+// returns { name, mode } where mode is 'orders' | 'other'
+function getActiveSheetSelection(){
+  const urlMode = new URLSearchParams(location.search).get('sheet');
+  const saved = safe(localStorage.getItem(SHEET_STORAGE_KEY));
+
+  const mode = (urlMode || saved || 'orders').toLowerCase();
+  if(mode === 'other') return { mode:'other', name: ORDERS_SHEET_OTHER };
+  return { mode:'orders', name: ORDERS_SHEET_MAIN };
+}
+
+function setActiveSheetSelection(mode){
+  const m = (mode === 'other') ? 'other' : 'orders';
+  try { localStorage.setItem(SHEET_STORAGE_KEY, m); } catch {}
+  // keep URL clean + shareable
+  const u = new URL(location.href);
+  u.searchParams.set('sheet', m);
+  location.href = u.toString(); // reload with new sheet
+}
+
+function ordersUrlForSheetName(sheetName){
+  return `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${apiKey}`;
+}
+
+function wireSheetToggleUI(){
+  const sel = getActiveSheetSelection();
+
+  const btnOrders = $('btnSheetOrders');
+  const btnOther  = $('btnSheetOther');
+  const hint      = $('sheetHint');
+
+  if(hint){
+    hint.textContent = (sel.mode === 'orders')
+      ? 'CouriersPlus'
+      : 'Pickup/Expedited + override';
+  }
+
+  function setBtnState(btn, on){
+    if(!btn) return;
+    btn.classList.toggle('active', !!on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  }
+
+  setBtnState(btnOrders, sel.mode === 'orders');
+  setBtnState(btnOther,  sel.mode === 'other');
+
+  btnOrders?.addEventListener('pointerdown', (e)=>{
+    killTap(e);
+    if(sel.mode !== 'orders') setActiveSheetSelection('orders');
+  }, { passive:false });
+
+  btnOther?.addEventListener('pointerdown', (e)=>{
+    killTap(e);
+    if(sel.mode !== 'other') setActiveSheetSelection('other');
+  }, { passive:false });
+}
 
 // =========================================================
 // STATE
@@ -834,7 +897,6 @@ function startHoldAction(e){
   holdTimer = setTimeout(()=>{
     holdTimer = null;
 
-    // If order is done -> NEXT order, otherwise PICK current
     rebuildQueue();
     const done = (queue.length === 0);
     if(done) nextOrder();
@@ -860,6 +922,9 @@ function cancelHoldAction(e){
 // =========================================================
 async function init(){
   try{
+    // ✅ NEW: sheet toggle UI first (so it shows immediately)
+    wireSheetToggleUI();
+
     $('btnSkip')?.addEventListener('pointerdown', (e)=>{ killTap(e); skipCurrent(); }, { passive:false });
     $('btnUndo')?.addEventListener('pointerdown', (e)=>{ killTap(e); undoLast(); }, { passive:false });
 
@@ -868,10 +933,6 @@ async function init(){
 
     $('btnResetOrder')?.addEventListener('pointerdown', (e)=>{ killTap(e); resetThisOrder(); }, { passive:false });
 
-    // IMPORTANT: there is NO purple pick button anymore.
-    // If you still have old HTML with #btnPickNext, this will safely do nothing.
-
-    // QTY button: hold 0.4s to confirm (pick / next)
     const qtyBtn = $('curQty');
     if(qtyBtn){
       qtyBtn.addEventListener('pointerdown', startHoldAction, { passive:false });
@@ -880,7 +941,11 @@ async function init(){
       qtyBtn.addEventListener('pointerleave', cancelHoldAction, { passive:false });
     }
 
-    // Load all 3 sheets
+    // ✅ Use selected sheet
+    const sel = getActiveSheetSelection();
+    const ordersUrl = ordersUrlForSheetName(sel.name);
+
+    // Load required sheets
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
@@ -888,7 +953,7 @@ async function init(){
     ]);
 
     const ordersValues = ordersJson.values || [];
-    if(ordersValues.length < 2) throw new Error('Orders sheet has no data.');
+    if(ordersValues.length < 2) throw new Error(`${sel.name} sheet has no data.`);
 
     const lookupValues = lookupJson.values || [];
     const varietyValues = varietyJson.values || [];
