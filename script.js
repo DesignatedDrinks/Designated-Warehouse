@@ -26,7 +26,7 @@ const $ = (id) => document.getElementById(id);
 const HOLD_MS = 400;
 
 // =========================================================
-// SHEET TOGGLE (SINGLE BUTTON)
+// SHEET TOGGLE (iOS SWITCH)
 // =========================================================
 const SHEET_STORAGE_KEY = 'dw_active_sheet_v1';
 
@@ -53,21 +53,50 @@ function ordersUrlForSheetName(sheetName){
 }
 
 function wireSheetToggleUI(){
-  const btn = $('btnSheetToggle');
-  if(!btn) return;
+  const toggle = $('sheetToggle');
+  const lblCourier = $('lblCourier');
+  const lblOther = $('lblOther');
+  if(!toggle) return;
 
   const sel = getActiveSheetSelection();
+  const isOther = sel.mode === 'other';
 
-  // Label reflects CURRENT mode (so you always know where you are)
-  const isOrders = sel.mode === 'orders';
-  btn.textContent = isOrders ? 'Courier Plus' : 'Other';
-  btn.setAttribute('aria-pressed', isOrders ? 'false' : 'true'); // pressed=true for Other (alternate)
-  btn.classList.toggle('isOther', !isOrders);
+  // checked = Other
+  toggle.checked = !!isOther;
 
-  btn.addEventListener('pointerdown', (e)=>{
+  function setLabelState(){
+    const onOther = toggle.checked;
+    lblCourier?.classList.toggle('active', !onOther);
+    lblOther?.classList.toggle('active', onOther);
+  }
+  setLabelState();
+
+  // iOS feel: don't allow double-trigger from ghost taps
+  let lock = false;
+
+  toggle.addEventListener('change', ()=>{
+    if(lock) return;
+    lock = true;
+
+    setLabelState();
+
+    // flip sheets
+    setActiveSheetSelection(toggle.checked ? 'other' : 'orders');
+  });
+
+  // If someone taps the labels, toggle too
+  lblCourier?.addEventListener('pointerdown', (e)=>{
     killTap(e);
-    // flip mode
-    setActiveSheetSelection(isOrders ? 'other' : 'orders');
+    if(lock) return;
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change', { bubbles:true }));
+  }, { passive:false });
+
+  lblOther?.addEventListener('pointerdown', (e)=>{
+    killTap(e);
+    if(lock) return;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles:true }));
   }, { passive:false });
 }
 
@@ -907,7 +936,7 @@ function cancelHoldAction(e){
 // =========================================================
 async function init(){
   try{
-    // ✅ single toggle button
+    // ✅ iOS-style switch (shows immediately)
     wireSheetToggleUI();
 
     $('btnSkip')?.addEventListener('pointerdown', (e)=>{ killTap(e); skipCurrent(); }, { passive:false });
