@@ -26,7 +26,7 @@ const $ = (id) => document.getElementById(id);
 const HOLD_MS = 400;
 
 // =========================================================
-// SHEET TOGGLE (NEW)
+// SHEET TOGGLE (SINGLE BUTTON)
 // =========================================================
 const SHEET_STORAGE_KEY = 'dw_active_sheet_v1';
 
@@ -43,7 +43,6 @@ function getActiveSheetSelection(){
 function setActiveSheetSelection(mode){
   const m = (mode === 'other') ? 'other' : 'orders';
   try { localStorage.setItem(SHEET_STORAGE_KEY, m); } catch {}
-  // keep URL clean + shareable
   const u = new URL(location.href);
   u.searchParams.set('sheet', m);
   location.href = u.toString(); // reload with new sheet
@@ -54,35 +53,21 @@ function ordersUrlForSheetName(sheetName){
 }
 
 function wireSheetToggleUI(){
+  const btn = $('btnSheetToggle');
+  if(!btn) return;
+
   const sel = getActiveSheetSelection();
 
-  const btnOrders = $('btnSheetOrders');
-  const btnOther  = $('btnSheetOther');
-  const hint      = $('sheetHint');
+  // Label reflects CURRENT mode (so you always know where you are)
+  const isOrders = sel.mode === 'orders';
+  btn.textContent = isOrders ? 'Courier Plus' : 'Other';
+  btn.setAttribute('aria-pressed', isOrders ? 'false' : 'true'); // pressed=true for Other (alternate)
+  btn.classList.toggle('isOther', !isOrders);
 
-  if(hint){
-    hint.textContent = (sel.mode === 'orders')
-      ? 'CouriersPlus'
-      : 'Pickup/Expedited + override';
-  }
-
-  function setBtnState(btn, on){
-    if(!btn) return;
-    btn.classList.toggle('active', !!on);
-    btn.setAttribute('aria-selected', on ? 'true' : 'false');
-  }
-
-  setBtnState(btnOrders, sel.mode === 'orders');
-  setBtnState(btnOther,  sel.mode === 'other');
-
-  btnOrders?.addEventListener('pointerdown', (e)=>{
+  btn.addEventListener('pointerdown', (e)=>{
     killTap(e);
-    if(sel.mode !== 'orders') setActiveSheetSelection('orders');
-  }, { passive:false });
-
-  btnOther?.addEventListener('pointerdown', (e)=>{
-    killTap(e);
-    if(sel.mode !== 'other') setActiveSheetSelection('other');
+    // flip mode
+    setActiveSheetSelection(isOrders ? 'other' : 'orders');
   }, { passive:false });
 }
 
@@ -922,7 +907,7 @@ function cancelHoldAction(e){
 // =========================================================
 async function init(){
   try{
-    // ✅ NEW: sheet toggle UI first (so it shows immediately)
+    // ✅ single toggle button
     wireSheetToggleUI();
 
     $('btnSkip')?.addEventListener('pointerdown', (e)=>{ killTap(e); skipCurrent(); }, { passive:false });
