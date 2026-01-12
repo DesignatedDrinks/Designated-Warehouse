@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css?v=12" />
+  <link rel="stylesheet" href="./style.css?v=13" />
 </head>
 <body>
 
@@ -12,8 +12,8 @@
   <div class="topRow">
     <div class="brand">Designated <span>Warehouse</span></div>
     <div class="orderNav">
-      <button id="btnPrevOrder" class="btn secondary">← Prev</button>
-      <button id="btnNextOrder" class="btn secondary">Next →</button>
+      <button id="btnPrevOrder" class="btn secondary" type="button">← Prev</button>
+      <button id="btnNextOrder" class="btn secondary" type="button">Next →</button>
     </div>
   </div>
 
@@ -23,6 +23,7 @@
         <div id="whoLine" class="whoLine">—</div>
         <div id="addrLine" class="addrLine">—</div>
       </div>
+
       <div class="chips">
         <div class="chip" id="chipOrder">#—</div>
         <div class="chip chipTotal" id="chipTotalCans">Total: —</div>
@@ -48,7 +49,7 @@
 <section class="deck">
 
   <div class="card current">
-    <!-- unchanged picking UI -->
+    <!-- UNCHANGED PICKING UI -->
   </div>
 
   <div class="listWrap">
@@ -60,12 +61,18 @@
     <div id="listBody" class="listBody"></div>
 
     <div class="listFooter">
-      <button id="btnResetOrder" class="btn big danger">Reset this order</button>
+      <button id="btnResetOrder" class="btn big danger" type="button">
+        Reset this order
+      </button>
 
-      <!-- ✅ TOGGLE (ONLY BUTTONS, NO TEXT) -->
+      <!-- ✅ SHEET TOGGLE -->
       <div class="sheetToggle">
-        <button id="btnSheetMain" class="btn secondary">Courier Plus</button>
-        <button id="btnSheetOther" class="btn secondary">Other</button>
+        <button id="btnSheetCourier" class="btn secondary" type="button">
+          Courier Plus
+        </button>
+        <button id="btnSheetOther" class="btn secondary" type="button">
+          Other
+        </button>
       </div>
     </div>
   </div>
@@ -73,6 +80,6 @@
 </section>
 </main>
 
-<script src="./script.js?v=12"></script>
+<script src="./script.js?v=13"></script>
 </body>
 </html>
