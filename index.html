@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css?v=8" />
+  <link rel="stylesheet" href="./style.css?v=9" />
 </head>
 <body>
 
@@ -54,8 +54,6 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- HOLD this red block (0.4s) to confirm PICK.
-               When order is DONE, it becomes NEXT (hold 0.4s). -->
           <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold 0.4s to confirm">
             <div class="holdFill" id="holdFill" aria-hidden="true"></div>
 
@@ -70,14 +68,12 @@
           </button>
         </div>
 
-        <!-- SINGLE COLUMN HERO: ONLY IMAGE (NO PICK BUTTON) -->
         <div class="heroPick singleHero">
           <div class="imgWrap heroImg noTap" aria-hidden="true">
             <img id="curImg" alt="Current item image" draggable="false" />
           </div>
         </div>
 
-        <!-- Bottom preview cards: NO TAP, NO BUTTONS -->
         <div class="nextRow noTap">
           <div class="card nextCard" aria-hidden="true">
             <div class="miniTop">
@@ -129,6 +125,25 @@
     </section>
   </main>
 
-  <script src="./script.js?v=8"></script>
+  <!-- ✅ Bottom sheet toggle bar (same look, lives at very bottom) -->
+  <div class="sheetToggleBar">
+    <div class="sheetToggleInner card">
+      <div class="sheetToggleLeft">
+        <div class="sheetToggleLabel">Sheet</div>
+        <div class="sheetToggleHint" id="sheetHint">—</div>
+      </div>
+
+      <div class="segmented" role="tablist" aria-label="Choose sheet">
+        <button id="btnSheetOrders" class="segBtn" type="button" role="tab" aria-selected="false">
+          Orders
+        </button>
+        <button id="btnSheetOther" class="segBtn" type="button" role="tab" aria-selected="false">
+          Orders_Other
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./script.js?v=9"></script>
 </body>
 </html>
