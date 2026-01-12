@@ -142,7 +142,7 @@ body{
 }
 
 /* LAYOUT */
-.wrap{ padding:10px 16px 28px; }
+.wrap{ padding:10px 16px 88px; } /* ✅ extra bottom padding so toggle never covers content */
 .deck{ display:grid; gap:12px; }
 
 .card{
@@ -411,6 +411,69 @@ body{
   line-height:1.2;
 }
 
+/* ✅ BOTTOM SHEET TOGGLE BAR */
+.sheetToggleBar{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:60;
+  padding:10px 16px 14px;
+  background:linear-gradient(180deg, rgba(246,246,247,0) 0%, rgba(246,246,247,.75) 30%, rgba(246,246,247,1) 100%);
+}
+
+.sheetToggleInner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border-radius:20px;
+}
+
+.sheetToggleLeft{
+  display:grid;
+  gap:2px;
+}
+.sheetToggleLabel{
+  font-weight:1100;
+  font-size:12px;
+  color:#111827;
+}
+.sheetToggleHint{
+  font-weight:950;
+  font-size:11px;
+  color:var(--muted);
+}
+
+/* segmented control */
+.segmented{
+  display:flex;
+  background:#f3f4f6;
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:4px;
+  gap:4px;
+}
+
+.segBtn{
+  border:0;
+  background:transparent;
+  color:#341a8a;
+  font-weight:1100;
+  font-size:12px;
+  padding:10px 12px;
+  border-radius:999px;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.segBtn.active{
+  background:#ede9fe;
+  box-shadow:0 8px 18px rgba(91,47,214,.14);
+}
+
 /* TABLET+: make QTY button bigger */
 @media (min-width: 768px){
   .qtyAction{
@@ -421,6 +484,9 @@ body{
   }
   .qtyNumber{ font-size:78px; }
   .holdHint{ font-size:11px; }
+
+  .sheetToggleInner{ padding:12px 14px; }
+  .segBtn{ font-size:13px; padding:12px 14px; }
 }
 
 /* FAILSAFE: if any old PICK button exists anywhere, hide it */
