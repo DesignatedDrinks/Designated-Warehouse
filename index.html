@@ -4,83 +4,141 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css?v=20" />
+  <link rel="stylesheet" href="./style.css?v=31" />
 </head>
 <body>
 
-<header class="top">
-  <div class="topRow">
-    <div class="brand">Designated <span>Warehouse</span></div>
+  <header class="top">
+    <div class="topRow">
+      <div class="brand">Designated <span>Warehouse</span></div>
 
-    <div class="orderNav">
-      <button id="btnPrevOrder" class="btn secondary" type="button">← Prev</button>
-      <button id="btnNextOrder" class="btn secondary" type="button">Next →</button>
-    </div>
-  </div>
-
-  <div id="orderCard" class="orderCard" style="display:none;">
-    <div class="orderMain">
-      <div class="who">
-        <div id="whoLine" class="whoLine">—</div>
-        <div id="addrLine" class="addrLine">—</div>
-      </div>
-
-      <div class="chips">
-        <div class="chip" id="chipOrder">#—</div>
-        <div class="chip chipTotal" id="chipTotalCans">Total: —</div>
-        <div class="chip" id="chipBoxes">Boxes: —</div>
-        <div class="chip" id="chipProgress">0%</div>
+      <div class="orderNav">
+        <button id="btnPrevOrder" class="btn secondary" type="button">← Prev</button>
+        <button id="btnNextOrder" class="btn secondary" type="button">Next →</button>
       </div>
     </div>
 
-    <div class="progressWrap">
-      <div class="progressBar">
-        <div id="progressFill" class="progressFill"></div>
+    <div id="orderCard" class="orderCard" style="display:none;">
+      <div class="orderMain">
+        <div class="who">
+          <div id="whoLine" class="whoLine">—</div>
+          <div id="addrLine" class="addrLine">—</div>
+        </div>
+
+        <div class="chips">
+          <div class="chip" id="chipOrder">#—</div>
+          <div class="chip chipTotal" id="chipTotalCans">Total: —</div>
+          <div class="chip" id="chipBoxes">Boxes: —</div>
+          <div class="chip" id="chipProgress">0%</div>
+        </div>
       </div>
-      <div class="progressMeta single">
-        <div id="progressRight">Total: —</div>
+
+      <div class="progressWrap">
+        <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
+        <div class="progressMeta single">
+          <div id="progressRight">Total: —</div>
+        </div>
       </div>
+
+      <div id="errBox"></div>
     </div>
+  </header>
 
-    <div id="errBox"></div>
-  </div>
-</header>
+  <main class="wrap">
+    <section class="deck">
 
-<main class="wrap">
-<section class="deck">
+      <div class="card current">
+        <div class="cardHead">
+          <div class="cardText">
+            <div class="title" id="curTitle">Loading…</div>
+            <div class="sub" id="curSub">—</div>
+          </div>
 
-  <div class="card current">
-    <!-- picking UI unchanged -->
-  </div>
+          <!-- HOLD this red block (0.4s) to confirm PICK.
+               When order is DONE, it becomes NEXT (hold 0.4s). -->
+          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold 0.4s to confirm">
+            <div class="holdFill" id="holdFill" aria-hidden="true"></div>
 
-  <div class="listWrap">
-    <div class="listHeader">
-      <div class="listTitle">Order list</div>
-      <div class="listHint">List is view-only</div>
-    </div>
+            <div class="qtyNumber" id="curQtyNumber">—</div>
 
-    <div id="listBody" class="listBody"></div>
+            <div class="qtyDone" id="curQtyDone" style="display:none;">
+              <div class="qtyCheck">✔</div>
+              <div class="qtyNext">NEXT</div>
+            </div>
 
-    <div class="listFooter">
-      <button id="btnResetOrder" class="btn big danger" type="button">
-        Reset this order
-      </button>
+            <div class="holdHint">Hold 0.4s</div>
+          </button>
+        </div>
 
-      <!-- ✅ SHEET TOGGLE -->
-      <div class="sheetToggle">
-        <button id="btnSheetCourier" class="btn secondary" type="button">
-          Courier Plus
-        </button>
-        <button id="btnSheetOther" class="btn secondary" type="button">
-          Other
-        </button>
+        <!-- SINGLE COLUMN HERO: ONLY IMAGE (NO PICK BUTTON) -->
+        <div class="heroPick singleHero">
+          <div class="imgWrap heroImg noTap" aria-hidden="true">
+            <img id="curImg" alt="Current item image" draggable="false" />
+          </div>
+        </div>
+
+        <!-- Bottom preview cards: NO TAP, NO BUTTONS -->
+        <div class="nextRow noTap">
+          <div class="card nextCard" aria-hidden="true">
+            <div class="miniTop">
+              <div class="miniQty miniQtyRed" id="n1Qty">—</div>
+              <div class="miniAisle" id="n1Aisle">—</div>
+            </div>
+            <div class="miniThumb">
+              <img id="n1Img" alt="Next item image 1" draggable="false" />
+            </div>
+          </div>
+
+          <div class="card nextCard" aria-hidden="true">
+            <div class="miniTop">
+              <div class="miniQty miniQtyRed" id="n2Qty">—</div>
+              <div class="miniAisle" id="n2Aisle">—</div>
+            </div>
+            <div class="miniThumb">
+              <img id="n2Img" alt="Next item image 2" draggable="false" />
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <div class="row2">
+            <button id="btnSkip" class="btn big secondary" type="button">Skip</button>
+            <button id="btnUndo" class="btn big danger" type="button">Undo last</button>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
 
-</section>
-</main>
+      <div class="listWrap">
+        <div class="listHeader">
+          <div class="listTitle">Order list</div>
+          <div class="listHint">List is view-only (prevents mis-taps)</div>
+        </div>
 
-<script src="./script.js?v=20"></script>
+        <div id="listBody" class="listBody"></div>
+
+        <div class="listFooter">
+          <button id="btnResetOrder" class="btn big danger" type="button">
+            Reset this order
+          </button>
+          <div class="resetHint">
+            Clears picked progress for this order on this device only.
+          </div>
+
+          <!-- ✅ Toggle BELOW reset button (non-sticky) -->
+          <div class="sheetToggle" role="tablist" aria-label="Sheet toggle">
+            <button id="btnSheetOrders" class="btn secondary" type="button" role="tab" aria-selected="false">
+              Courier Plus
+            </button>
+            <button id="btnSheetOther" class="btn secondary" type="button" role="tab" aria-selected="false">
+              Other
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="./script.js?v=31"></script>
 </body>
 </html>
