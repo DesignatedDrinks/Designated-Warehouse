@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css?v=32" />
+  <link rel="stylesheet" href="./style.css?v=33" />
 </head>
 <body>
 
@@ -124,16 +124,25 @@
             Clears picked progress for this order on this device only.
           </div>
 
-          <!-- ✅ SINGLE TOGGLE BUTTON BELOW RESET -->
-          <button id="btnSheetToggle" class="btn big secondary toggleBtn" type="button" aria-pressed="false">
-            Courier Plus
-          </button>
+          <!-- ✅ iOS-style toggle row -->
+          <div class="toggleRow" role="group" aria-label="Sheet toggle">
+            <div class="toggleLabels">
+              <span id="lblCourier" class="toggleLabel">Courier Plus</span>
+              <span id="lblOther" class="toggleLabel">Other</span>
+            </div>
+
+            <label class="iosSwitch" aria-label="Courier Plus / Other">
+              <input id="sheetToggle" type="checkbox" />
+              <span class="slider" aria-hidden="true"></span>
+            </label>
+          </div>
+
         </div>
       </div>
 
     </section>
   </main>
 
-  <script src="./script.js?v=32"></script>
+  <script src="./script.js?v=33"></script>
 </body>
 </html>
