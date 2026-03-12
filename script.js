@@ -370,6 +370,7 @@ function buildVarietyPackMap(values){
   const hmap = buildHeaderMap(values[0]);
   const colPack = pickHeader(hmap, ['variety pack name','varietypackname','pack name','pack']);
   const colBeer = pickHeader(hmap, ['beer name','beername','item','title','product']);
+  const colImg  = pickHeader(hmap, ['beer image url','imageurl','image url','img']);
   const colQty  = pickHeader(hmap, ['qtyperpackitem','qty per pack item','qty','quantity','per pack qty','perpack']);
 
   if(colPack == null || colBeer == null) return out;
@@ -385,10 +386,21 @@ function buildVarietyPackMap(values){
       qty = Number.isFinite(q) && q > 0 ? q : 1;
     }
 
+    const imageUrl = colImg != null ? safe(row[colImg] ?? '') : '';
     const keyPack = normalizePackTitle(packTitleRaw);
+    const keyBeer = itemKeyByTitle(beerTitle);
+
     const record = out.get(keyPack) || { packTitle: packTitleRaw, components: [] };
     record.packTitle = record.packTitle || packTitleRaw;
-    record.components.push({ title: beerTitle, qty });
+
+    const existing = record.components.find(c => itemKeyByTitle(c.title) === keyBeer);
+    if(existing){
+      existing.qty += qty;
+      if(!existing.imageUrl && imageUrl) existing.imageUrl = imageUrl;
+    }else{
+      record.components.push({ title: beerTitle, qty, imageUrl });
+    }
+
     out.set(keyPack, record);
   }
 
@@ -418,6 +430,7 @@ function expandVarietyPackRow(r){
       units: qtyUnits,
       packSize: 1,
       cans: qtyUnits,
+      imageUrl: safe(c.imageUrl) || r.imageUrl,
     });
   }
 
