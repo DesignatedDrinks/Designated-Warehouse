@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css?v=33" />
+  <link rel="stylesheet" href="./style.css?v=34" />
 </head>
 <body>
 
@@ -54,8 +54,6 @@
             <div class="sub" id="curSub">—</div>
           </div>
 
-          <!-- HOLD this red block (0.4s) to confirm PICK.
-               When order is DONE, it becomes NEXT (hold 0.4s). -->
           <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold 0.4s to confirm">
             <div class="holdFill" id="holdFill" aria-hidden="true"></div>
 
@@ -70,14 +68,12 @@
           </button>
         </div>
 
-        <!-- SINGLE COLUMN HERO: ONLY IMAGE (NO PICK BUTTON) -->
         <div class="heroPick singleHero">
           <div class="imgWrap heroImg noTap" aria-hidden="true">
             <img id="curImg" alt="Current item image" draggable="false" />
           </div>
         </div>
 
-        <!-- Bottom preview cards: NO TAP, NO BUTTONS -->
         <div class="nextRow noTap">
           <div class="card nextCard" aria-hidden="true">
             <div class="miniTop">
@@ -124,7 +120,6 @@
             Clears picked progress for this order on this device only.
           </div>
 
-          <!-- ✅ iOS-style toggle row -->
           <div class="toggleRow" role="group" aria-label="Sheet toggle">
             <div class="toggleLabels">
               <span id="lblCourier" class="toggleLabel">Courier Plus</span>
@@ -143,6 +138,6 @@
     </section>
   </main>
 
-  <script src="./script.js?v=33"></script>
+  <script src="./script.js?v=34"></script>
 </body>
 </html>
