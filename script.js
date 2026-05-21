@@ -296,43 +296,98 @@ function parseLocCode(locCode){
 
     A-01, A-02, A-03
 
-    B-N-01, B-N-02, B-N-03
-    B-S-01, B-S-02, B-S-03
+    B-N-01, B-S-01
+    B-N-02, B-S-02
+    ...
+    B-N-11, B-S-11
 
-    C-N-01, C-N-02, C-N-03
-    C-S-01, C-S-02, C-S-03
+    C-11, A-11
+    C-10, A-10
+    C-09, A-09
+    ...
+    C-04, A-04
 
-    Picking order:
-    A first
-    B second
-    C last
+    Pick order:
+    A-01
+    A-02
+    A-03
+
+    B-N-01
+    B-S-01
+    B-N-02
+    B-S-02
+    ...
+    B-N-11
+    B-S-11
+
+    C-11
+    A-11
+    C-10
+    A-10
+    C-09
+    A-09
+    ...
   */
 
-  // B and C aisles with North/South sides
-  let m = s.match(/^([BC])-([NS])-(\d{1,2})$/);
-  if(m){
-    const aisle = m[1]; // B or C
-    const side = m[2];  // N or S
-    const n = parseInt(m[3], 10);
+  // Exact custom walking path overrides.
+  // Anything listed here follows this exact physical pick path.
+  const customOrder = {
+    'A-01': 1,
+    'A-02': 2,
+    'A-03': 3,
 
-    if(!Number.isFinite(n)) return null;
+    'B-N-01': 101,
+    'B-S-01': 102,
+    'B-N-02': 103,
+    'B-S-02': 104,
+    'B-N-03': 105,
+    'B-S-03': 106,
+    'B-N-04': 107,
+    'B-S-04': 108,
+    'B-N-05': 109,
+    'B-S-05': 110,
+    'B-N-06': 111,
+    'B-S-06': 112,
+    'B-N-07': 113,
+    'B-S-07': 114,
+    'B-N-08': 115,
+    'B-S-08': 116,
+    'B-N-09': 117,
+    'B-S-09': 118,
+    'B-N-10': 119,
+    'B-S-10': 120,
+    'B-N-11': 121,
+    'B-S-11': 122,
 
-    // B = second aisle, C = last aisle
-    const aisleOrder = aisle === 'B' ? 1 : 2;
+    'C-11': 201,
+    'A-11': 202,
+    'C-10': 203,
+    'A-10': 204,
+    'C-09': 205,
+    'A-09': 206,
+    'C-08': 207,
+    'A-08': 208,
+    'C-07': 209,
+    'A-07': 210,
+    'C-06': 211,
+    'A-06': 212,
+    'C-05': 213,
+    'A-05': 214,
+    'C-04': 215,
+    'A-04': 216
+  };
 
-    // N side before S side
-    const sideOrder = side === 'N' ? 0 : 1;
-
+  if(customOrder[s]){
     return {
-      zone: aisle,
-      idx: n,
-      side,
-      sortKey: [aisleOrder, n, sideOrder]
+      zone: s.split('-')[0],
+      idx: customOrder[s],
+      side: '',
+      sortKey: [customOrder[s], 0, 0]
     };
   }
 
-  // A row/aisle comes first
-  m = s.match(/^A-(\d{1,2})$/);
+  // Fallback for any A-## location not listed above.
+  let m = s.match(/^A-(\d{1,2})$/);
   if(m){
     const n = parseInt(m[1], 10);
     if(!Number.isFinite(n)) return null;
@@ -341,16 +396,49 @@ function parseLocCode(locCode){
       zone: 'A',
       idx: n,
       side: '',
-      sortKey: [0, n, 0]
+      sortKey: [900 + n, 0, 0]
     };
   }
 
-  // Unknown locations go to the end
+  // Fallback for B-N-## / B-S-## locations not listed above.
+  // This keeps the same N/S walking pattern if you ever add B-12, B-13, etc.
+  m = s.match(/^B-([NS])-(\d{1,2})$/);
+  if(m){
+    const side = m[1];
+    const n = parseInt(m[2], 10);
+
+    if(!Number.isFinite(n)) return null;
+
+    const sideOrder = side === 'N' ? 0 : 1;
+
+    return {
+      zone: 'B',
+      idx: n,
+      side,
+      sortKey: [1000 + (n * 2) + sideOrder, 0, 0]
+    };
+  }
+
+  // Fallback for C-## locations not listed above.
+  m = s.match(/^C-(\d{1,2})$/);
+  if(m){
+    const n = parseInt(m[1], 10);
+    if(!Number.isFinite(n)) return null;
+
+    return {
+      zone: 'C',
+      idx: n,
+      side: '',
+      sortKey: [1100 + n, 0, 0]
+    };
+  }
+
+  // Unknown locations go to the very end.
   return {
     zone: '?',
     idx: 999,
     side: '',
-    sortKey: [99, 999, 0]
+    sortKey: [9999, 999, 0]
   };
 }
 
