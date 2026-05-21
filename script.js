@@ -3,7 +3,7 @@
 // =========================================================
 const sheetId   = '1xE9SueE6rdDapXr0l8OtP_IryFM-Z6fHFH27_cQ120g';
 
-// ✅ Both sheets (toggleable)
+// Both sheets toggleable
 const ORDERS_SHEET_MAIN  = 'Orders';
 const ORDERS_SHEET_OTHER = 'Orders_Other';
 
@@ -26,11 +26,10 @@ const $ = (id) => document.getElementById(id);
 const HOLD_MS = 400;
 
 // =========================================================
-// SHEET TOGGLE (iOS SWITCH)
+// SHEET TOGGLE
 // =========================================================
 const SHEET_STORAGE_KEY = 'dw_active_sheet_v1';
 
-// returns { name, mode } where mode is 'orders' | 'other'
 function getActiveSheetSelection(){
   const urlMode = new URLSearchParams(location.search).get('sheet');
   const saved = safe(localStorage.getItem(SHEET_STORAGE_KEY));
@@ -45,7 +44,7 @@ function setActiveSheetSelection(mode){
   try { localStorage.setItem(SHEET_STORAGE_KEY, m); } catch {}
   const u = new URL(location.href);
   u.searchParams.set('sheet', m);
-  location.href = u.toString(); // reload with new sheet
+  location.href = u.toString();
 }
 
 function ordersUrlForSheetName(sheetName){
@@ -61,7 +60,6 @@ function wireSheetToggleUI(){
   const sel = getActiveSheetSelection();
   const isOther = sel.mode === 'other';
 
-  // checked = Other
   toggle.checked = !!isOther;
 
   function setLabelState(){
@@ -71,7 +69,6 @@ function wireSheetToggleUI(){
   }
   setLabelState();
 
-  // iOS feel: don't allow double-trigger from ghost taps
   let lock = false;
 
   toggle.addEventListener('change', ()=>{
@@ -79,12 +76,9 @@ function wireSheetToggleUI(){
     lock = true;
 
     setLabelState();
-
-    // flip sheets
     setActiveSheetSelection(toggle.checked ? 'other' : 'orders');
   });
 
-  // If someone taps the labels, toggle too
   lblCourier?.addEventListener('pointerdown', (e)=>{
     killTap(e);
     if(lock) return;
@@ -112,11 +106,10 @@ let queueIndex = 0;
 let undoStack = [];
 const STORAGE_KEY = 'dw_picked_queue_v2';
 
-// Runtime built
 let VARIETY_PACK_MAP = new Map();
 
 // =========================================================
-// BATTERY OPT: Picked cache + debounced storage writes
+// PICKED CACHE
 // =========================================================
 let pickedCache = null;
 let saveTimer = null;
@@ -298,23 +291,63 @@ function parseLocCode(locCode){
   const s = safe(locCode).toUpperCase();
   if(!s) return null;
 
-  let m = s.match(/^B-([NS])-(\d{1,2})$/);
+  /*
+    Supported location codes:
+
+    A-01, A-02, A-03
+
+    B-N-01, B-N-02, B-N-03
+    B-S-01, B-S-02, B-S-03
+
+    C-N-01, C-N-02, C-N-03
+    C-S-01, C-S-02, C-S-03
+
+    Use C-N-## and C-S-## for aisle / row 3.
+  */
+
+  // B and C aisles with North/South sides
+  let m = s.match(/^([BC])-([NS])-(\d{1,2})$/);
   if(m){
-    const side = m[1];
-    const n = parseInt(m[2],10);
+    const aisle = m[1];
+    const side = m[2];
+    const n = parseInt(m[3], 10);
+
     if(!Number.isFinite(n)) return null;
-    const sideOrder = (side === 'N') ? 0 : 1;
-    return { zone:'B', idx:n, side, sortKey: [1, n, sideOrder] };
+
+    // B first, C second
+    const aisleOrder = aisle === 'B' ? 1 : 2;
+
+    // N side before S side
+    const sideOrder = side === 'N' ? 0 : 1;
+
+    return {
+      zone: aisle,
+      idx: n,
+      side,
+      sortKey: [aisleOrder, n, sideOrder]
+    };
   }
 
+  // A row
   m = s.match(/^A-(\d{1,2})$/);
   if(m){
-    const n = parseInt(m[1],10);
+    const n = parseInt(m[1], 10);
     if(!Number.isFinite(n)) return null;
-    return { zone:'A', idx:n, side:'', sortKey: [2, -n, 0] };
+
+    return {
+      zone: 'A',
+      idx: n,
+      side: '',
+      sortKey: [3, -n, 0]
+    };
   }
 
-  return { zone:'?', idx:999, side:'', sortKey: [99, 999, 0] };
+  return {
+    zone: '?',
+    idx: 999,
+    side: '',
+    sortKey: [99, 999, 0]
+  };
 }
 
 function locLabel(locCode){
@@ -500,7 +533,7 @@ function buildLookupMap(values){
 }
 
 // =========================================================
-// BOX BREAKDOWN (24 / 12 / 6)
+// BOX BREAKDOWN
 // =========================================================
 function boxBreakdown(totalCans){
   let n = Math.max(0, totalCans|0);
@@ -894,7 +927,7 @@ function resetThisOrder(){
 }
 
 // =========================================================
-// HOLD-TO-CONFIRM (0.4s) ON QTY BUTTON
+// HOLD-TO-CONFIRM
 // =========================================================
 let holdTimer = null;
 let holding = false;
@@ -949,7 +982,6 @@ function cancelHoldAction(e){
 // =========================================================
 async function init(){
   try{
-    // ✅ iOS-style switch (shows immediately)
     wireSheetToggleUI();
 
     $('btnSkip')?.addEventListener('pointerdown', (e)=>{ killTap(e); skipCurrent(); }, { passive:false });
@@ -968,11 +1000,9 @@ async function init(){
       qtyBtn.addEventListener('pointerleave', cancelHoldAction, { passive:false });
     }
 
-    // ✅ Use selected sheet
     const sel = getActiveSheetSelection();
     const ordersUrl = ordersUrlForSheetName(sel.name);
 
-    // Load required sheets
     const [ordersJson, lookupJson, varietyJson] = await Promise.all([
       fetchJson(ordersUrl),
       fetchJson(lookupUrl),
