@@ -302,19 +302,22 @@ function parseLocCode(locCode){
     C-N-01, C-N-02, C-N-03
     C-S-01, C-S-02, C-S-03
 
-    Use C-N-## and C-S-## for aisle / row 3.
+    Picking order:
+    A first
+    B second
+    C last
   */
 
   // B and C aisles with North/South sides
   let m = s.match(/^([BC])-([NS])-(\d{1,2})$/);
   if(m){
-    const aisle = m[1];
-    const side = m[2];
+    const aisle = m[1]; // B or C
+    const side = m[2];  // N or S
     const n = parseInt(m[3], 10);
 
     if(!Number.isFinite(n)) return null;
 
-    // B first, C second
+    // B = second aisle, C = last aisle
     const aisleOrder = aisle === 'B' ? 1 : 2;
 
     // N side before S side
@@ -328,7 +331,7 @@ function parseLocCode(locCode){
     };
   }
 
-  // A row
+  // A row/aisle comes first
   m = s.match(/^A-(\d{1,2})$/);
   if(m){
     const n = parseInt(m[1], 10);
@@ -338,10 +341,11 @@ function parseLocCode(locCode){
       zone: 'A',
       idx: n,
       side: '',
-      sortKey: [3, -n, 0]
+      sortKey: [0, n, 0]
     };
   }
 
+  // Unknown locations go to the end
   return {
     zone: '?',
     idx: 999,
