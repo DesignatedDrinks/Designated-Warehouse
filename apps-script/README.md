@@ -34,7 +34,7 @@ Use the smallest access set that supports the warehouse:
 
 - `read_products` — required for product IDs, titles and images.
 - `read_orders` — add this only when the legacy order-import process is migrated into the new app.
-- Protected customer fields: **Name** and **Address** — required only if the order importer writes customer names and shipping addresses into the warehouse Sheet.
+- Protected customer data fields: **Name** and **Address** — configure these only if the order importer writes customer names and shipping addresses into the warehouse Sheet.
 
 Do not request write access, payment data, customer email or customer phone unless a confirmed warehouse feature actually requires it.
 
@@ -104,7 +104,7 @@ Do not manually populate the generated token properties.
 4. Use Shopify's default app-home URL because the current warehouse UI is not embedded in Shopify Admin.
 5. Select Admin API and webhook version `2026-07`.
 6. Add `read_products`.
-7. Add `read_orders` and protected customer **Name** and **Address** only when the order-import code is ready to migrate.
+7. When the order-import code is ready to migrate, add `read_orders` and configure protected customer data for **Name** and **Address**.
 8. Release the app version.
 9. Install the app on the Designated Drinks store.
 10. From the app's **Settings**, copy the Client ID and Client Secret into Apps Script Properties.
