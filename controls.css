@@ -9,6 +9,25 @@ body {
   padding-bottom: calc(22px + env(safe-area-inset-bottom));
 }
 
+/* Current-pick hierarchy: identify the beer first, then show its location. */
+.currentProductTitle {
+  margin: 0 0 13px !important;
+}
+
+.pickLocationBlock {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+}
+
+.pickLocationBlock .pickEyebrow {
+  margin: 0;
+}
+
+.pickLocationBlock + .pickMeta {
+  margin-top: 9px;
+}
+
 .bottomDock {
   position: static;
   z-index: auto;
@@ -142,6 +161,10 @@ body {
 }
 
 @media (max-width: 620px) {
+  .currentProductTitle {
+    margin-bottom: 11px !important;
+  }
+
   .bottomDock {
     grid-template-columns: 1fr;
     grid-template-areas:
