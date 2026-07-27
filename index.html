@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="./style.css?v=52" />
-  <link rel="stylesheet" href="./controls.css?v=55" />
+  <link rel="stylesheet" href="./controls.css?v=56" />
 </head>
 <body>
   <header class="appHeader">
@@ -20,6 +20,10 @@
       <div class="orderControls">
         <button id="btnPrevOrder" class="navButton" type="button" aria-label="Previous order">←</button>
         <select id="orderSelect" aria-label="Choose order"></select>
+        <div class="topCanTotal" aria-label="Total cans in this order">
+          <span>Cans</span>
+          <strong id="chipTotalCans">—</strong>
+        </div>
         <button id="btnNextOrder" class="navButton" type="button" aria-label="Next order">→</button>
       </div>
     </div>
@@ -32,7 +36,6 @@
       </div>
       <div class="summaryStrip">
         <div><span>Order</span><strong id="chipOrder">—</strong></div>
-        <div><span>Cans</span><strong id="chipTotalCans">—</strong></div>
         <div><span>Boxes</span><strong id="chipBoxes">—</strong></div>
         <div><span>Picked</span><strong id="chipProgress">—</strong></div>
       </div>
