@@ -17,11 +17,27 @@ Hiding the API key alone does not secure the data. The production app should not
 - Pulls active products from Shopify Admin GraphQL API.
 - Updates existing `ImageLookup` image URLs.
 - Appends new Shopify products automatically.
-- Preserves the existing `locCode` values and row order.
+- Preserves every existing `locCode` in column D.
+- Adds the stable Shopify product ID in column E so product-title changes do not disconnect a product from its warehouse location.
+- Uses title matching only during the first migration to attach IDs to existing rows.
+- Never deletes manual or discontinued rows.
 - Rebuilds the image preview formula in column C.
+- Includes `backupImageLookup()` to make a timestamped backup tab before the first production sync.
 - Provides a daily time-driven trigger installer.
 - Provides a server-side `getWarehouseData(mode)` function for a future Apps Script-hosted frontend.
 - Restricts server-side warehouse data to emails listed in `ALLOWED_EMAILS`.
+
+## `ImageLookup` columns
+
+| Column | Header | Behaviour |
+|---|---|---|
+| A | `itemTitle` | Updated from Shopify after the product ID has been attached |
+| B | `imageUrl` | Automatically refreshed from Shopify |
+| C | `imagePreview` | Automatically rebuilt as an `IMAGE()` formula |
+| D | `locCode` | **Never overwritten by the synchronization** |
+| E | `shopifyProductId` | Stable Shopify ID used to protect the row/location when a title changes |
+
+Brand-new products are appended with a blank `locCode`. You assign their location once; later syncs preserve it.
 
 ## Script Properties
 
@@ -45,8 +61,10 @@ Do not put these values in GitHub, `Code.gs`, HTML, or client-side JavaScript.
 3. Enable **Show appsscript.json manifest file** in Project Settings and copy the included manifest.
 4. Add the Script Properties listed above.
 5. Run `testShopifyConnection()` and authorize the requested permissions.
-6. Run `syncShopifyProductImages()` once and confirm `ImageLookup` columns A–D are correct.
-7. Run `installDailyImageSync()` to refresh the images every day at approximately 3:00 AM Toronto time.
+6. Run `backupImageLookup()` once. Confirm that a timestamped backup tab was created.
+7. Run `syncShopifyProductImages()` once and confirm `ImageLookup` columns A–E are correct.
+8. Spot-check several existing products and confirm their column-D `locCode` values did not change.
+9. Run `installDailyImageSync()` to refresh the images every day at approximately 3:00 AM Toronto time.
 
 ## Required security cleanup
 
