@@ -65,20 +65,10 @@ function installDailyImageSyncWithDevApp() {
 }
 
 /**
- * Removes the cached short-lived token. The next sync automatically gets a new
- * one from Shopify using the Client ID and Client Secret.
+ * Removes only the generated Shopify token cache values. Configuration and all
+ * unrelated Apps Script properties remain untouched.
  */
 function clearCachedShopifyAccessToken() {
-  PropertiesService.getScriptProperties().deleteAllProperties();
-
-  throw new Error(
-    'Cancelled for safety: this function would remove unrelated Script Properties. ' +
-    'Use clearCachedShopifyAccessTokenSafely() instead.'
-  );
-}
-
-/** Removes only Shopify-generated token cache values. */
-function clearCachedShopifyAccessTokenSafely() {
   var properties = PropertiesService.getScriptProperties();
   properties.deleteProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_PROPERTY);
   properties.deleteProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_EXPIRY_PROPERTY);
