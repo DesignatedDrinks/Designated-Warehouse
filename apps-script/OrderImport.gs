@@ -4,12 +4,14 @@
 // - Shopify tag "CouriersPlus" -> Orders
 // - Shopify tag "Orders_Other" -> Orders_Other
 //
-// This importer intentionally does not query Shopify's Customer object.
-// The recipient name comes from the order shipping address, so read_customers
-// is not required. The app still needs read_orders and access to the protected
-// order fields used by the warehouse (recipient name and shipping address).
+// Customer-name priority:
+// 1. Shipping recipient name
+// 2. Billing name
+// 3. "No customer name"
 //
-// Run installFiveMinuteOrderImportTrigger() once to create the schedule.
+// The importer intentionally does not query Shopify's Customer object, so the
+// read_customers scope is not required. It does require read_orders and access
+// to the protected order fields used for fulfillment.
 
 var DW_ORDER_IMPORT = {
   COURIERS_TAG: 'CouriersPlus',
@@ -32,7 +34,6 @@ var DW_ORDER_IMPORT = {
   LINE_ITEMS_PAGE_SIZE: 250
 };
 
-/** Imports both tagged order queues into their respective sheets. */
 function runAllImports() {
   var tokenResult = ensureShopifyAccessToken_();
   assertRequiredShopifyScope_(tokenResult.scope, 'read_orders');
@@ -40,7 +41,6 @@ function runAllImports() {
   var courierOrders = fetchTaggedOpenOrders_(DW_ORDER_IMPORT.COURIERS_TAG);
   var otherOrders = fetchTaggedOpenOrders_(DW_ORDER_IMPORT.OTHER_TAG)
     .filter(function(order) {
-      // An order carrying both tags belongs in Courier Plus only.
       return !hasOrderTag_(order, DW_ORDER_IMPORT.COURIERS_TAG);
     });
 
@@ -79,7 +79,6 @@ function runAllImports() {
   }
 }
 
-/** Tests Shopify access and tag matching without writing to the spreadsheet. */
 function testTaggedOrderImport() {
   var tokenResult = ensureShopifyAccessToken_();
   assertRequiredShopifyScope_(tokenResult.scope, 'read_orders');
@@ -94,6 +93,12 @@ function testTaggedOrderImport() {
     ok: true,
     courierPlusOrders: courierOrders.length,
     ordersOtherOrders: otherOrders.length,
+    ordersOtherNames: otherOrders.slice(0, 10).map(function(order) {
+      return {
+        orderId: String(order.name || order.id || '').trim(),
+        customerName: orderCustomerName_(order)
+      };
+    }),
     grantedScopes: tokenResult.scope,
     checkedAt: new Date().toISOString()
   };
@@ -102,7 +107,6 @@ function testTaggedOrderImport() {
   return result;
 }
 
-/** Installs exactly one time-driven order import trigger every five minutes. */
 function installFiveMinuteOrderImportTrigger() {
   removeOrderImportTriggers_();
 
@@ -114,7 +118,6 @@ function installFiveMinuteOrderImportTrigger() {
   return 'Order import trigger installed: runAllImports every 5 minutes.';
 }
 
-/** Removes stale and duplicate order import triggers only. */
 function removeOrderImportTriggers_() {
   var handlerNames = {
     runAllImports: true,
@@ -130,7 +133,6 @@ function removeOrderImportTriggers_() {
   });
 }
 
-/** Returns open orders carrying the requested tag and at least one unfulfilled item. */
 function fetchTaggedOpenOrders_(tag) {
   var orders = [];
   var after = null;
@@ -147,6 +149,15 @@ function fetchTaggedOpenOrders_(tag) {
         '      note',
         '      tags',
         '      shippingAddress {',
+        '        name',
+        '        address1',
+        '        address2',
+        '        city',
+        '        provinceCode',
+        '        zip',
+        '        country',
+        '      }',
+        '      billingAddress {',
         '        name',
         '        address1',
         '        address2',
@@ -210,7 +221,6 @@ function fetchTaggedOpenOrders_(tag) {
   return orders;
 }
 
-/** Sends an authenticated Admin GraphQL request and returns its data object. */
 function shopifyGraphqlRequest_(query, variables) {
   var properties = PropertiesService.getScriptProperties();
   var storeDomain = requiredProperty_(DW_CONFIG.SHOPIFY_STORE_DOMAIN)
@@ -264,7 +274,6 @@ function shopifyGraphqlRequest_(query, variables) {
   return parsed.data;
 }
 
-/** Rebuilds one queue while preserving picked values for rows that still exist. */
 function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
   var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
   ensureOrderSheetSchema_(sheet);
@@ -275,7 +284,8 @@ function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
   orders.forEach(function(order) {
     var orderId = String(order.name || order.id || '').trim();
     var customerName = orderCustomerName_(order);
-    var address = orderAddress_(order.shippingAddress);
+    var addressObject = order.shippingAddress || order.billingAddress;
+    var address = orderAddress_(addressObject);
     var notes = String(order.note || '').trim();
     var deliveryMethod = order.shippingLine && order.shippingLine.title
       ? String(order.shippingLine.title).trim()
@@ -321,7 +331,6 @@ function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
   }
 
   if (rows.length > 0) {
-    // Add validation first, then write booleans so preserved picked values survive.
     sheet.getRange(2, 7, rows.length, 1).insertCheckboxes();
     sheet.getRange(2, 1, rows.length, DW_ORDER_IMPORT.HEADERS.length).setValues(rows);
   }
@@ -336,7 +345,6 @@ function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
   };
 }
 
-/** Keeps the order queues on the fixed ten-column schema. */
 function ensureOrderSheetSchema_(sheet) {
   var requiredColumns = DW_ORDER_IMPORT.HEADERS.length;
   var maxColumns = sheet.getMaxColumns();
@@ -372,15 +380,19 @@ function readExistingPickedState_(sheet) {
   return result;
 }
 
-/** Uses only the recipient name already stored on the order shipping address. */
 function orderCustomerName_(order) {
-  return order.shippingAddress && order.shippingAddress.name
+  var shippingName = order.shippingAddress && order.shippingAddress.name
     ? String(order.shippingAddress.name).trim()
-    : 'No customer name';
+    : '';
+  var billingName = order.billingAddress && order.billingAddress.name
+    ? String(order.billingAddress.name).trim()
+    : '';
+
+  return shippingName || billingName || 'No customer name';
 }
 
 function orderAddress_(address) {
-  if (!address) return 'No shipping address';
+  if (!address) return 'No shipping or billing address';
 
   var locality = [address.city, address.provinceCode]
     .filter(function(value) { return String(value || '').trim() !== ''; })
