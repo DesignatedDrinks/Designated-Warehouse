@@ -28,6 +28,47 @@ body {
   margin-top: 9px;
 }
 
+/* Top order navigation: arrows, order selector and a prominent can total. */
+.orderControls {
+  grid-template-columns: 42px minmax(0, 1fr) 64px 42px;
+}
+
+.topCanTotal {
+  display: grid;
+  place-content: center;
+  align-self: stretch;
+  min-width: 64px;
+  height: 40px;
+  padding: 3px 7px;
+  border: 1px solid #c9bbff;
+  border-radius: 11px;
+  background: var(--purple);
+  color: #fff;
+  text-align: center;
+  line-height: 1;
+}
+
+.topCanTotal span {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.topCanTotal strong {
+  display: block;
+  font-size: 19px;
+  font-weight: 1000;
+  letter-spacing: -0.02em;
+}
+
+.summaryStrip {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 /* Make previous/next order controls easy to find without overpowering picking. */
 .orderControls .navButton {
   border-color: #c9bbff;
@@ -189,6 +230,20 @@ body {
 @media (max-width: 620px) {
   .currentProductTitle {
     margin-bottom: 11px !important;
+  }
+
+  .orderControls {
+    grid-template-columns: 38px minmax(0, 1fr) 58px 38px;
+  }
+
+  .topCanTotal {
+    min-width: 58px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .topCanTotal strong {
+    font-size: 18px;
   }
 
   .bottomDock {
