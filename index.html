@@ -8,6 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Designated Warehouse</title>
   <link rel="stylesheet" href="./style.css?v=52" />
+  <link rel="stylesheet" href="./controls.css?v=53" />
 </head>
 <body>
   <header class="appHeader">
@@ -75,7 +76,7 @@
             <div id="curSub" class="pickMeta">—</div>
           </div>
 
-          <div id="missingLocation" class="warning" hidden>This product has no warehouse location. Use maintenance to update its locCode.</div>
+          <div id="missingLocation" class="warning" hidden>This product has no warehouse location. Use Settings to update its locCode.</div>
           <div class="actionRow">
             <button id="btnSkip" class="secondaryButton" type="button">Skip item</button>
             <button id="btnUndo" class="secondaryButton" type="button">Undo last</button>
@@ -97,29 +98,42 @@
         <button id="btnResetOrder" class="resetButton" type="button">Reset picked progress for this order</button>
       </section>
     </section>
-  </main>
 
-  <nav class="bottomDock" aria-label="Order source and data controls">
-    <div class="sourceTabs" role="tablist" aria-label="Order source">
-      <button id="tabOrders" class="sourceTab active" type="button">Courier Plus</button>
-      <button id="tabOther" class="sourceTab" type="button">Other</button>
-    </div>
-    <button id="btnRefresh" class="refreshButton" type="button" aria-label="Refresh warehouse data">↻</button>
-    <div class="dockStatus">
-      <span id="connectionStatus" class="statusPill loading">Loading</span>
-      <span id="lastUpdated" class="lastUpdated">Not loaded</span>
-      <button id="btnMaintenance" class="maintenanceButton" type="button" aria-label="Hold for maintenance" title="Hold for maintenance">•••</button>
-    </div>
-  </nav>
+    <nav class="bottomDock" aria-label="Order source and warehouse settings">
+      <div class="bottomControlHeading">
+        <strong>Warehouse controls</strong>
+        <span>Out of the way during picking</span>
+      </div>
+
+      <div class="sourceTabs" role="tablist" aria-label="Order source">
+        <button id="tabOrders" class="sourceTab active" type="button">Courier Plus</button>
+        <button id="tabOther" class="sourceTab" type="button">Other Orders</button>
+      </div>
+
+      <div class="dockActions">
+        <button id="btnRefresh" class="refreshButton" type="button" aria-label="Refresh warehouse data">
+          <span aria-hidden="true">↻</span> Refresh
+        </button>
+        <button id="btnMaintenance" class="maintenanceButton" type="button" aria-label="Open locCode settings">
+          <span aria-hidden="true">⚙</span> Settings
+        </button>
+      </div>
+
+      <div class="dockStatus">
+        <span id="connectionStatus" class="statusPill loading">Loading</span>
+        <span id="lastUpdated" class="lastUpdated">Not loaded</span>
+      </div>
+    </nav>
+  </main>
 
   <div id="maintenanceOverlay" class="maintenanceOverlay" hidden>
     <section class="maintenanceDialog" role="dialog" aria-modal="true" aria-labelledby="maintenanceTitle">
       <div class="maintenanceHeader">
         <div>
-          <div class="maintenanceEyebrow">WAREHOUSE MAINTENANCE</div>
+          <div class="maintenanceEyebrow">WAREHOUSE SETTINGS</div>
           <h2 id="maintenanceTitle">Update locCode</h2>
         </div>
-        <button id="btnCloseMaintenance" class="closeButton" type="button" aria-label="Close maintenance">×</button>
+        <button id="btnCloseMaintenance" class="closeButton" type="button" aria-label="Close settings">×</button>
       </div>
 
       <div class="maintenanceProduct">
@@ -154,6 +168,6 @@
   </div>
 
   <script src="./script.js?v=52"></script>
-  <script src="./maintenance.js?v=52"></script>
+  <script src="./maintenance.js?v=53"></script>
 </body>
 </html>
