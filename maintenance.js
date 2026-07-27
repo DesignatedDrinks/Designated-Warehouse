@@ -2,9 +2,7 @@
 
 (() => {
   const ENDPOINT_KEY = 'designated_warehouse_loc_endpoint_v1';
-  const MAINTENANCE_HOLD_MS = 700;
   const byId = id => document.getElementById(id);
-  let maintenanceTimer = null;
 
   function endpointFromStorage() {
     try { return String(localStorage.getItem(ENDPOINT_KEY) || '').trim(); }
@@ -67,22 +65,6 @@
     byId('maintenanceOverlay').hidden = true;
     document.body.style.overflow = '';
     byId('maintenancePin').value = '';
-  }
-
-  function cancelMaintenanceHold() {
-    if (maintenanceTimer) clearTimeout(maintenanceTimer);
-    maintenanceTimer = null;
-    byId('btnMaintenance')?.classList.remove('arming');
-  }
-
-  function beginMaintenanceHold(event) {
-    event.preventDefault();
-    cancelMaintenanceHold();
-    byId('btnMaintenance').classList.add('arming');
-    maintenanceTimer = setTimeout(() => {
-      cancelMaintenanceHold();
-      openMaintenance();
-    }, MAINTENANCE_HOLD_MS);
   }
 
   function applyLocationLocally(itemKey, locCode) {
@@ -168,8 +150,7 @@
     const button = byId('btnMaintenance');
     if (!button) return;
 
-    button.addEventListener('pointerdown', beginMaintenanceHold);
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(type => button.addEventListener(type, cancelMaintenanceHold));
+    button.addEventListener('click', openMaintenance);
     byId('btnCloseMaintenance').addEventListener('click', closeMaintenance);
     byId('maintenanceOverlay').addEventListener('pointerdown', event => {
       if (event.target === byId('maintenanceOverlay')) closeMaintenance();
@@ -178,9 +159,6 @@
 
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && !byId('maintenanceOverlay').hidden) closeMaintenance();
-    });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) cancelMaintenanceHold();
     });
   }
 
