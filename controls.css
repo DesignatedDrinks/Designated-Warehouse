@@ -1,0 +1,176 @@
+/* Bottom-of-page warehouse controls.
+   This file intentionally overrides the old fixed-dock rules in style.css. */
+
+body {
+  padding-bottom: 0;
+}
+
+.page {
+  padding-bottom: calc(22px + env(safe-area-inset-bottom));
+}
+
+.bottomDock {
+  position: static;
+  z-index: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  grid-template-areas:
+    "heading status"
+    "sources actions";
+  align-items: center;
+  gap: 10px 14px;
+  width: 100%;
+  min-height: 0;
+  margin: 14px 0 0;
+  padding: 13px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+}
+
+.bottomControlHeading {
+  grid-area: heading;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.bottomControlHeading strong {
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.bottomControlHeading span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.sourceTabs {
+  grid-area: sources;
+  width: min(100%, 460px);
+}
+
+.dockActions {
+  grid-area: actions;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 8px;
+  justify-content: end;
+}
+
+.refreshButton,
+.maintenanceButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: auto;
+  min-width: 112px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  opacity: 1;
+  cursor: pointer;
+}
+
+.refreshButton span,
+.maintenanceButton span {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.maintenanceButton {
+  background: #f7f8fa;
+}
+
+.maintenanceButton.arming {
+  background: #f7f8fa;
+  color: var(--ink);
+}
+
+.dockStatus {
+  grid-area: status;
+  position: static;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.dockStatus .statusPill,
+.dockStatus .lastUpdated {
+  display: inline-flex;
+}
+
+@media (max-width: 850px) {
+  .bottomDock {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "heading status"
+      "sources sources"
+      "actions actions";
+  }
+
+  .sourceTabs {
+    width: 100%;
+  }
+
+  .dockActions {
+    justify-content: stretch;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .refreshButton,
+  .maintenanceButton {
+    width: 100%;
+  }
+
+  .lastUpdated {
+    display: none !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .bottomDock {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "heading"
+      "sources"
+      "actions"
+      "status";
+    padding: 11px;
+  }
+
+  .bottomControlHeading {
+    display: grid;
+    gap: 2px;
+  }
+
+  .dockStatus {
+    position: static;
+    justify-content: flex-start;
+  }
+
+  .dockStatus .statusPill {
+    display: inline-flex;
+  }
+
+  .dockStatus .lastUpdated {
+    display: none;
+  }
+
+  .maintenanceButton {
+    opacity: 1;
+  }
+}
