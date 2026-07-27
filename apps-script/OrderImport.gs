@@ -4,6 +4,11 @@
 // - Shopify tag "CouriersPlus" -> Orders
 // - Shopify tag "Orders_Other" -> Orders_Other
 //
+// This importer intentionally does not query Shopify's Customer object.
+// The recipient name comes from the order shipping address, so read_customers
+// is not required. The app still needs read_orders and access to the protected
+// order fields used by the warehouse (recipient name and shipping address).
+//
 // Run installFiveMinuteOrderImportTrigger() once to create the schedule.
 
 var DW_ORDER_IMPORT = {
@@ -27,6 +32,7 @@ var DW_ORDER_IMPORT = {
   LINE_ITEMS_PAGE_SIZE: 250
 };
 
+/** Imports both tagged order queues into their respective sheets. */
 function runAllImports() {
   var tokenResult = ensureShopifyAccessToken_();
   assertRequiredShopifyScope_(tokenResult.scope, 'read_orders');
@@ -34,6 +40,7 @@ function runAllImports() {
   var courierOrders = fetchTaggedOpenOrders_(DW_ORDER_IMPORT.COURIERS_TAG);
   var otherOrders = fetchTaggedOpenOrders_(DW_ORDER_IMPORT.OTHER_TAG)
     .filter(function(order) {
+      // An order carrying both tags belongs in Courier Plus only.
       return !hasOrderTag_(order, DW_ORDER_IMPORT.COURIERS_TAG);
     });
 
@@ -72,6 +79,7 @@ function runAllImports() {
   }
 }
 
+/** Tests Shopify access and tag matching without writing to the spreadsheet. */
 function testTaggedOrderImport() {
   var tokenResult = ensureShopifyAccessToken_();
   assertRequiredShopifyScope_(tokenResult.scope, 'read_orders');
@@ -94,6 +102,7 @@ function testTaggedOrderImport() {
   return result;
 }
 
+/** Installs exactly one time-driven order import trigger every five minutes. */
 function installFiveMinuteOrderImportTrigger() {
   removeOrderImportTriggers_();
 
@@ -105,6 +114,7 @@ function installFiveMinuteOrderImportTrigger() {
   return 'Order import trigger installed: runAllImports every 5 minutes.';
 }
 
+/** Removes stale and duplicate order import triggers only. */
 function removeOrderImportTriggers_() {
   var handlerNames = {
     runAllImports: true,
@@ -120,6 +130,7 @@ function removeOrderImportTriggers_() {
   });
 }
 
+/** Returns open orders carrying the requested tag and at least one unfulfilled item. */
 function fetchTaggedOpenOrders_(tag) {
   var orders = [];
   var after = null;
@@ -135,7 +146,6 @@ function fetchTaggedOpenOrders_(tag) {
         '      name',
         '      note',
         '      tags',
-        '      customer { displayName }',
         '      shippingAddress {',
         '        name',
         '        address1',
@@ -200,6 +210,7 @@ function fetchTaggedOpenOrders_(tag) {
   return orders;
 }
 
+/** Sends an authenticated Admin GraphQL request and returns its data object. */
 function shopifyGraphqlRequest_(query, variables) {
   var properties = PropertiesService.getScriptProperties();
   var storeDomain = requiredProperty_(DW_CONFIG.SHOPIFY_STORE_DOMAIN)
@@ -234,10 +245,16 @@ function shopifyGraphqlRequest_(query, variables) {
   }
 
   if (parsed.errors && parsed.errors.length) {
+    var seen = {};
     var messages = parsed.errors.map(function(error) {
       return error.message || String(error);
-    }).join(' | ');
-    throw new Error('Shopify GraphQL order import failed: ' + messages);
+    }).filter(function(message) {
+      if (seen[message]) return false;
+      seen[message] = true;
+      return true;
+    });
+
+    throw new Error('Shopify GraphQL order import failed: ' + messages.join(' | '));
   }
 
   if (!parsed.data) {
@@ -247,9 +264,10 @@ function shopifyGraphqlRequest_(query, variables) {
   return parsed.data;
 }
 
+/** Rebuilds one queue while preserving picked values for rows that still exist. */
 function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
   var sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
-  ensureOrderSheetSize_(sheet);
+  ensureOrderSheetSchema_(sheet);
 
   var pickedByKey = readExistingPickedState_(sheet);
   var rows = [];
@@ -270,7 +288,9 @@ function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
       if (!orderId || !itemTitle || qty <= 0) return;
 
       var key = orderRowKey_(orderId, itemTitle, variantTitle);
-      var picked = pickedByKey.hasOwnProperty(key) ? Boolean(pickedByKey[key]) : false;
+      var picked = Object.prototype.hasOwnProperty.call(pickedByKey, key)
+        ? Boolean(pickedByKey[key])
+        : false;
       var imageUrl = lineItem.image && lineItem.image.url
         ? String(lineItem.image.url).trim()
         : '';
@@ -301,8 +321,9 @@ function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
   }
 
   if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, DW_ORDER_IMPORT.HEADERS.length).setValues(rows);
+    // Add validation first, then write booleans so preserved picked values survive.
     sheet.getRange(2, 7, rows.length, 1).insertCheckboxes();
+    sheet.getRange(2, 1, rows.length, DW_ORDER_IMPORT.HEADERS.length).setValues(rows);
   }
 
   sheet.setFrozenRows(1);
@@ -315,10 +336,15 @@ function writeTaggedOrdersToSheet_(ss, sheetName, orders, routeTag) {
   };
 }
 
-function ensureOrderSheetSize_(sheet) {
+/** Keeps the order queues on the fixed ten-column schema. */
+function ensureOrderSheetSchema_(sheet) {
   var requiredColumns = DW_ORDER_IMPORT.HEADERS.length;
-  if (sheet.getMaxColumns() < requiredColumns) {
-    sheet.insertColumnsAfter(sheet.getMaxColumns(), requiredColumns - sheet.getMaxColumns());
+  var maxColumns = sheet.getMaxColumns();
+
+  if (maxColumns < requiredColumns) {
+    sheet.insertColumnsAfter(maxColumns, requiredColumns - maxColumns);
+  } else if (maxColumns > requiredColumns) {
+    sheet.deleteColumns(requiredColumns + 1, maxColumns - requiredColumns);
   }
 }
 
@@ -346,14 +372,11 @@ function readExistingPickedState_(sheet) {
   return result;
 }
 
+/** Uses only the recipient name already stored on the order shipping address. */
 function orderCustomerName_(order) {
-  var shippingName = order.shippingAddress && order.shippingAddress.name
+  return order.shippingAddress && order.shippingAddress.name
     ? String(order.shippingAddress.name).trim()
-    : '';
-  var customerName = order.customer && order.customer.displayName
-    ? String(order.customer.displayName).trim()
-    : '';
-  return shippingName || customerName || 'No customer name';
+    : 'No customer name';
 }
 
 function orderAddress_(address) {
