@@ -3,141 +3,78 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css?v=34" />
+  <link rel="stylesheet" href="./style.css?v=50" />
 </head>
 <body>
-
-  <header class="top">
-    <div class="topRow">
-      <div class="brand">Designated <span>Warehouse</span></div>
-
-      <div class="orderNav">
-        <button id="btnPrevOrder" class="btn secondary" type="button">← Prev</button>
-        <button id="btnNextOrder" class="btn secondary" type="button">Next →</button>
+  <header class="appHeader">
+    <div class="brandRow">
+      <div>
+        <div class="eyebrow">DESIGNATED DRINKS</div>
+        <h1>Warehouse</h1>
       </div>
+      <div id="connectionStatus" class="statusPill loading">Loading</div>
     </div>
-
-    <div id="orderCard" class="orderCard" style="display:none;">
-      <div class="orderMain">
-        <div class="who">
-          <div id="whoLine" class="whoLine">—</div>
-          <div id="addrLine" class="addrLine">—</div>
-        </div>
-
-        <div class="chips">
-          <div class="chip" id="chipOrder">#—</div>
-          <div class="chip chipTotal" id="chipTotalCans">Total: —</div>
-          <div class="chip" id="chipBoxes">Boxes: —</div>
-          <div class="chip" id="chipProgress">0%</div>
-        </div>
-      </div>
-
-      <div class="progressWrap">
-        <div class="progressBar"><div id="progressFill" class="progressFill"></div></div>
-        <div class="progressMeta single">
-          <div id="progressRight">Total: —</div>
-        </div>
-      </div>
-
-      <div id="errBox"></div>
+    <div class="sourceTabs" role="tablist" aria-label="Order source">
+      <button id="tabOrders" class="sourceTab active" type="button">Courier Plus</button>
+      <button id="tabOther" class="sourceTab" type="button">Other</button>
     </div>
+    <div class="toolbar">
+      <label class="searchBox"><span>Search</span><input id="orderSearch" type="search" placeholder="Order or customer" autocomplete="off" /></label>
+      <button id="btnRefresh" class="iconButton" type="button" aria-label="Refresh warehouse data">↻</button>
+    </div>
+    <div class="orderControls">
+      <button id="btnPrevOrder" class="navButton" type="button">←</button>
+      <select id="orderSelect" aria-label="Choose order"></select>
+      <button id="btnNextOrder" class="navButton" type="button">→</button>
+    </div>
+    <section id="orderSummary" class="orderSummary" hidden>
+      <div class="customerBlock">
+        <div id="whoLine" class="customerName">—</div>
+        <div id="addrLine" class="customerAddress">—</div>
+        <div id="noteLine" class="orderNote" hidden></div>
+      </div>
+      <div class="summaryGrid">
+        <div><span>Order</span><strong id="chipOrder">—</strong></div>
+        <div><span>Cans</span><strong id="chipTotalCans">—</strong></div>
+        <div><span>Boxes</span><strong id="chipBoxes">—</strong></div>
+        <div><span>Picked</span><strong id="chipProgress">—</strong></div>
+      </div>
+      <div class="progressTrack"><div id="progressFill" class="progressFill"></div></div>
+      <div id="progressRight" class="progressText">—</div>
+    </section>
+    <div id="errBox" aria-live="polite"></div>
   </header>
-
-  <main class="wrap">
-    <section class="deck">
-
-      <div class="card current">
-        <div class="cardHead">
-          <div class="cardText">
-            <div class="title" id="curTitle">Loading…</div>
-            <div class="sub" id="curSub">—</div>
-          </div>
-
-          <button class="qtyBig qtyAction" id="curQty" type="button" aria-label="Hold 0.4s to confirm">
-            <div class="holdFill" id="holdFill" aria-hidden="true"></div>
-
-            <div class="qtyNumber" id="curQtyNumber">—</div>
-
-            <div class="qtyDone" id="curQtyDone" style="display:none;">
-              <div class="qtyCheck">✔</div>
-              <div class="qtyNext">NEXT</div>
-            </div>
-
-            <div class="holdHint">Hold 0.4s</div>
+  <main class="page">
+    <section id="emptyState" class="emptyState" hidden><h2>No orders found</h2><p>Try the other order source or refresh the data.</p></section>
+    <section id="picker" class="picker" hidden>
+      <article class="pickCard">
+        <div class="pickHeader">
+          <div class="pickText"><div id="locationBadge" class="locationBadge">—</div><h2 id="curTitle">Loading…</h2><div id="curSub" class="pickMeta">—</div></div>
+          <button id="curQty" class="quantityButton" type="button" aria-label="Hold to mark item picked">
+            <span id="holdFill" class="holdFill" aria-hidden="true"></span><span id="curQtyNumber" class="quantityNumber">—</span><span id="curQtyDone" class="quantityDone" hidden>✓<small>NEXT</small></span><span class="holdLabel">HOLD</span>
           </button>
         </div>
-
-        <div class="heroPick singleHero">
-          <div class="imgWrap heroImg noTap" aria-hidden="true">
-            <img id="curImg" alt="Current item image" draggable="false" />
-          </div>
+        <div class="productImageWrap"><img id="curImg" alt="Current product" draggable="false" /></div>
+        <div id="missingLocation" class="warning" hidden>This product has no warehouse location. Add its locCode in ImageLookup column D.</div>
+        <div class="actionRow"><button id="btnSkip" class="secondaryButton" type="button">Skip item</button><button id="btnUndo" class="secondaryButton" type="button">Undo last</button></div>
+      </article>
+      <section class="nextSection">
+        <div class="sectionHeading"><h3>Up next</h3><span id="remainingLabel">—</span></div>
+        <div class="nextGrid">
+          <article class="nextCard"><div><strong id="n1Qty">—</strong><span id="n1Aisle">—</span></div><img id="n1Img" alt="Next product" draggable="false" /></article>
+          <article class="nextCard"><div><strong id="n2Qty">—</strong><span id="n2Aisle">—</span></div><img id="n2Img" alt="Following product" draggable="false" /></article>
         </div>
-
-        <div class="nextRow noTap">
-          <div class="card nextCard" aria-hidden="true">
-            <div class="miniTop">
-              <div class="miniQty miniQtyRed" id="n1Qty">—</div>
-              <div class="miniAisle" id="n1Aisle">—</div>
-            </div>
-            <div class="miniThumb">
-              <img id="n1Img" alt="Next item image 1" draggable="false" />
-            </div>
-          </div>
-
-          <div class="card nextCard" aria-hidden="true">
-            <div class="miniTop">
-              <div class="miniQty miniQtyRed" id="n2Qty">—</div>
-              <div class="miniAisle" id="n2Aisle">—</div>
-            </div>
-            <div class="miniThumb">
-              <img id="n2Img" alt="Next item image 2" draggable="false" />
-            </div>
-          </div>
-        </div>
-
-        <div class="actions">
-          <div class="row2">
-            <button id="btnSkip" class="btn big secondary" type="button">Skip</button>
-            <button id="btnUndo" class="btn big danger" type="button">Undo last</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="listWrap">
-        <div class="listHeader">
-          <div class="listTitle">Order list</div>
-          <div class="listHint">List is view-only (prevents mis-taps)</div>
-        </div>
-
+      </section>
+      <section class="orderListPanel">
+        <div class="sectionHeading"><h3>Order list</h3><span>Tap an item to jump</span></div>
         <div id="listBody" class="listBody"></div>
-
-        <div class="listFooter">
-          <button id="btnResetOrder" class="btn big danger" type="button">
-            Reset this order
-          </button>
-          <div class="resetHint">
-            Clears picked progress for this order on this device only.
-          </div>
-
-          <div class="toggleRow" role="group" aria-label="Sheet toggle">
-            <div class="toggleLabels">
-              <span id="lblCourier" class="toggleLabel">Courier Plus</span>
-              <span id="lblOther" class="toggleLabel">Other</span>
-            </div>
-
-            <label class="iosSwitch" aria-label="Courier Plus / Other">
-              <input id="sheetToggle" type="checkbox" />
-              <span class="slider" aria-hidden="true"></span>
-            </label>
-          </div>
-
-        </div>
-      </div>
-
+        <button id="btnResetOrder" class="resetButton" type="button">Reset picked progress for this order</button>
+      </section>
     </section>
   </main>
-
-  <script src="./script.js?v=34"></script>
+  <footer class="footer"><span id="lastUpdated">Not loaded</span><span>Progress is saved on this iPad.</span></footer>
+  <script src="./script.js?v=50"></script>
 </body>
 </html>
