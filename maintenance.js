@@ -2,16 +2,23 @@
 
 (() => {
   const ENDPOINT_KEY = 'designated_warehouse_loc_endpoint_v1';
+  const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzarxaRH1x_rKWz7QPH7XLurUfwLkb18OrXpgvSFi8ie8kgQLdqs7xwXCokPvMyq7UQ/exec';
   const byId = id => document.getElementById(id);
 
   function endpointFromStorage() {
-    try { return String(localStorage.getItem(ENDPOINT_KEY) || '').trim(); }
-    catch { return ''; }
+    try {
+      return String(localStorage.getItem(ENDPOINT_KEY) || '').trim() || DEFAULT_ENDPOINT;
+    } catch {
+      return DEFAULT_ENDPOINT;
+    }
   }
 
   function saveEndpoint(value) {
-    try { localStorage.setItem(ENDPOINT_KEY, String(value || '').trim()); }
-    catch {}
+    const endpoint = String(value || '').trim();
+    try {
+      if (!endpoint || endpoint === DEFAULT_ENDPOINT) localStorage.removeItem(ENDPOINT_KEY);
+      else localStorage.setItem(ENDPOINT_KEY, endpoint);
+    } catch {}
   }
 
   function canonicalLocCode(value) {
@@ -48,13 +55,12 @@
     }
 
     const lookup = activeLookup(item);
-    const endpoint = endpointFromStorage();
     byId('maintenanceProductTitle').textContent = item.itemTitle || 'Current product';
     byId('maintenanceProductId').textContent = lookup?.productId || 'No Shopify product ID — title matching will be used';
     byId('locCodeInput').value = lookup?.locCode || item.locCode || '';
     byId('maintenancePin').value = '';
-    byId('locCodeEndpoint').value = endpoint;
-    byId('endpointDetails').open = !endpoint;
+    byId('locCodeEndpoint').value = endpointFromStorage();
+    byId('endpointDetails').open = false;
     showMaintenanceMessage('');
     byId('maintenanceOverlay').hidden = false;
     document.body.style.overflow = 'hidden';
@@ -98,14 +104,14 @@
     if (!item) return;
 
     const lookup = activeLookup(item);
-    const endpoint = String(byId('locCodeEndpoint').value || '').trim();
+    const endpoint = String(byId('locCodeEndpoint').value || '').trim() || DEFAULT_ENDPOINT;
     const pin = String(byId('maintenancePin').value || '').trim();
     const saveButton = byId('btnSaveLocCode');
 
     try {
       const locCode = canonicalLocCode(byId('locCodeInput').value);
       if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/i.test(endpoint)) {
-        throw new Error('Add the deployed Apps Script web app URL ending in /exec.');
+        throw new Error('The Apps Script endpoint is invalid. Open Advanced endpoint only if the deployment URL changed.');
       }
       if (!pin) throw new Error('Enter the maintenance PIN.');
 
@@ -138,8 +144,9 @@
       showMaintenanceMessage(`Saved ${result.locCode || 'blank location'}.`, 'success');
       setTimeout(closeMaintenance, 500);
     } catch (error) {
-      showMaintenanceMessage(error.message || 'The location could not be saved.', 'error');
-      byId('endpointDetails').open = !endpointFromStorage();
+      const message = error.message || 'The location could not be saved.';
+      showMaintenanceMessage(message, 'error');
+      if (/endpoint|deployment|invalid response/i.test(message)) byId('endpointDetails').open = true;
     } finally {
       saveButton.disabled = false;
       saveButton.textContent = 'Save location';
