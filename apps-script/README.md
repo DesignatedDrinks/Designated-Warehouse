@@ -17,7 +17,7 @@ Hiding the API key alone does not secure the data. The production app should not
 
 ## Modern Shopify authentication
 
-The replacement app is created in Shopify's Dev Dashboard and installed on the Designated Drinks store.
+The replacement app is created in Shopify's Dev Dashboard and installed on the Designated Drinks store. The app and production store must appear in the same Shopify organization for the client-credentials flow used here.
 
 Apps Script stores only these long-lived credentials in **Script Properties**:
 
@@ -57,6 +57,8 @@ Do not request write access, payment data, customer email or customer phone unle
 - Requests a Shopify access token using the Dev Dashboard Client ID and Client Secret.
 - Caches the generated token and its expiry in Script Properties.
 - Reuses a valid token and refreshes it before expiry.
+- Uses a script lock to prevent simultaneous token refreshes.
+- Verifies that the generated token includes `read_products`.
 - Runs the product image sync through `syncShopifyProductImagesWithDevApp()`.
 - Tests authentication without rewriting the Sheet through `testShopifyDevAppConnection()`.
 - Installs the correct authenticated daily trigger through `installDailyImageSyncWithDevApp()`.
@@ -98,16 +100,17 @@ Do not manually populate the generated token properties.
 
 ## Shopify Dev Dashboard setup
 
-1. Open Shopify Dev Dashboard and create an app named **Designated Warehouse**.
-2. Start from **Dev Dashboard**, not a legacy admin-created custom app.
-3. Create a version.
-4. Use Shopify's default app-home URL because the current warehouse UI is not embedded in Shopify Admin.
-5. Select Admin API and webhook version `2026-07`.
-6. Add `read_products`.
-7. When the order-import code is ready to migrate, add `read_orders` and configure protected customer data for **Name** and **Address**.
-8. Release the app version.
-9. Install the app on the Designated Drinks store.
-10. From the app's **Settings**, copy the Client ID and Client Secret into Apps Script Properties.
+1. Open Shopify Dev Dashboard and confirm the Designated Drinks production store appears in the same organization that will own the app.
+2. Create an app named **Designated Warehouse**.
+3. Start from **Dev Dashboard**, not a legacy admin-created custom app.
+4. Create a version.
+5. Use Shopify's default app-home URL because the current warehouse UI is not embedded in Shopify Admin.
+6. Select Admin API and webhook version `2026-07`.
+7. Add `read_products`.
+8. When the order-import code is ready to migrate, add `read_orders` and configure protected customer data for **Name** and **Address**.
+9. Release the app version.
+10. Install the app on the Designated Drinks store.
+11. From the app's **Settings**, copy the Client ID and Client Secret into Apps Script Properties.
 
 Do not uninstall the legacy custom app yet. Run the new app in parallel until product sync and order import have both been verified.
 
