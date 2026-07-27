@@ -135,9 +135,10 @@ Use a controlled cutover rather than replacing everything at once:
 1. Keep the legacy app installed and operational.
 2. Activate the new Dev Dashboard authentication for product-image sync.
 3. Verify at least one automatic token refresh and one daily image sync.
-4. Locate and migrate the separate order-import/webhook code.
-5. Compare the new order output against the legacy output without letting both integrations write duplicate rows.
-6. Only after the order import is verified should the legacy custom app be uninstalled and its old token revoked.
+4. Open the warehouse spreadsheet's Apps Script editor and locate the functions or triggers that currently populate `Orders` and `Orders_Other`. That source is not stored in this GitHub repository and was not discoverable as a separate Drive file.
+5. Migrate the order-import/webhook code to the new authentication flow.
+6. Compare the new order output against the legacy output without letting both integrations write duplicate rows.
+7. Only after the order import is verified should the legacy custom app be uninstalled and its old token revoked.
 
 ## Required security cleanup
 
