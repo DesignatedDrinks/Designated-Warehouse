@@ -35,6 +35,7 @@ function syncShopifyProductImagesWithDevApp() {
  */
 function testShopifyDevAppConnection() {
   var tokenResult = ensureShopifyAccessToken_();
+  assertRequiredShopifyScope_(tokenResult.scope, 'read_products');
   var productResult = testShopifyConnection();
 
   return {
@@ -78,22 +79,29 @@ function clearCachedShopifyAccessToken() {
 }
 
 function ensureShopifyAccessToken_() {
-  var properties = PropertiesService.getScriptProperties();
-  var token = String(properties.getProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_PROPERTY) || '').trim();
-  var expiresAt = Number(properties.getProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_EXPIRY_PROPERTY) || 0);
-  var scope = String(properties.getProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_SCOPE_PROPERTY) || '').trim();
-  var now = Date.now();
-  var refreshBufferMs = 5 * 60 * 1000;
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
 
-  if (token && expiresAt > now + refreshBufferMs) {
-    return {
-      refreshed: false,
-      expiresAt: new Date(expiresAt).toISOString(),
-      scope: scope
-    };
+  try {
+    var properties = PropertiesService.getScriptProperties();
+    var token = String(properties.getProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_PROPERTY) || '').trim();
+    var expiresAt = Number(properties.getProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_EXPIRY_PROPERTY) || 0);
+    var scope = String(properties.getProperty(SHOPIFY_DEV_APP_CONFIG.TOKEN_SCOPE_PROPERTY) || '').trim();
+    var now = Date.now();
+    var refreshBufferMs = 5 * 60 * 1000;
+
+    if (token && expiresAt > now + refreshBufferMs) {
+      return {
+        refreshed: false,
+        expiresAt: new Date(expiresAt).toISOString(),
+        scope: scope
+      };
+    }
+
+    return requestShopifyAccessToken_();
+  } finally {
+    lock.releaseLock();
   }
-
-  return requestShopifyAccessToken_();
 }
 
 function requestShopifyAccessToken_() {
@@ -144,6 +152,8 @@ function requestShopifyAccessToken_() {
     throw new Error('Shopify token response was missing access_token or expires_in.');
   }
 
+  assertRequiredShopifyScope_(scope, 'read_products');
+
   var expiresAt = Date.now() + expiresInSeconds * 1000;
   var cacheValues = {};
   cacheValues[SHOPIFY_DEV_APP_CONFIG.TOKEN_PROPERTY] = accessToken;
@@ -156,6 +166,20 @@ function requestShopifyAccessToken_() {
     expiresAt: new Date(expiresAt).toISOString(),
     scope: scope
   };
+}
+
+function assertRequiredShopifyScope_(scopeText, requiredScope) {
+  var scopes = String(scopeText || '')
+    .split(',')
+    .map(function(scope) { return scope.trim(); })
+    .filter(Boolean);
+
+  if (scopes.indexOf(requiredScope) === -1) {
+    throw new Error(
+      'The installed Shopify app token is missing required scope: ' + requiredScope + '. ' +
+      'Release a Dev Dashboard app version with that scope and reinstall or update the app.'
+    );
+  }
 }
 
 function removeDevAppImageSyncTriggers_() {
