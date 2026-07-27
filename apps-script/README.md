@@ -5,7 +5,7 @@ This folder prepares Designated Warehouse to move from a legacy Shopify custom a
 ## What this fixes
 
 1. `ImageLookup` is manually maintained and becomes stale when Shopify product images change or new products are added.
-2. The current public `script.js` contains a Google API key. Browser JavaScript cannot keep an API key, token, password, Client ID secret, or Client Secret private.
+2. The current public `script.js` contains a Google API key. Browser JavaScript cannot keep an API key, token, password, or Client Secret private.
 3. The legacy Shopify custom app relies on a manually copied long-lived Admin API token.
 4. Product locations must survive every product/image refresh.
 
@@ -19,7 +19,7 @@ Hiding the API key alone does not secure the data. The production app should not
 
 The replacement app is created in Shopify's Dev Dashboard and installed on the Designated Drinks store. The app and production store must appear in the same Shopify organization for the client-credentials flow used here.
 
-Apps Script stores only these long-lived credentials in **Script Properties**:
+Apps Script stores these long-lived credentials in **Script Properties**:
 
 - Shopify Client ID
 - Shopify Client Secret
