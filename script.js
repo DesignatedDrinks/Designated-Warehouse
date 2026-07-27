@@ -21,7 +21,7 @@ function normalize(value){
 }
 function parseQty(value){ const n = Number.parseInt(safe(value).replace(/[^0-9-]/g,''),10); return Number.isFinite(n) ? n : 0; }
 function parseBool(value){ return ['true','1','yes','y'].includes(safe(value).toLowerCase()); }
-function headerMap(row){ const map = new Map(); row.forEach((value,index)=>map.set(normalize(value),index)); return map; }
+function headerMap(row){ const map = new Map(); row.forEach((value,index)=>{ const key=normalize(value); if(key && !map.has(key)) map.set(key,index); }); return map; }
 function col(map, names){ for(const name of names){ const key=normalize(name); if(map.has(key)) return map.get(key); } return -1; }
 function sheetUrl(sheetId, sheetName){ return `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}?alt=json&key=${CONFIG.apiKey}`; }
 
@@ -143,14 +143,16 @@ function setStatus(text,type='ok'){ const el=$('connectionStatus'); el.textConte
 function showError(message){ $('errBox').innerHTML=message?`<div class="errorBox">${escapeHtml(message)}</div>`:''; }
 function escapeHtml(value){ return safe(value).replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char])); }
 
-function filterOrders(){
-  const query=normalize($('orderSearch').value);
-  state.filtered=query?state.orders.filter(order=>normalize(`${order.orderId} ${order.customerName} ${order.address}`).includes(query)):state.orders.slice();
-  state.orderIndex=Math.min(state.orderIndex,Math.max(0,state.filtered.length-1)); state.itemIndex=0; populateOrderSelect(); render();
+function syncOrderList(){
+  state.filtered=state.orders.slice();
+  state.orderIndex=Math.min(state.orderIndex,Math.max(0,state.filtered.length-1));
+  state.itemIndex=0;
+  populateOrderSelect();
+  render();
 }
 function populateOrderSelect(){
   const select=$('orderSelect'); select.innerHTML='';
-  state.filtered.forEach((order,index)=>{ const option=document.createElement('option'); option.value=String(index); option.textContent=`${order.orderId} — ${order.customerName||'No customer'}`; select.append(option); });
+  state.filtered.forEach((order,index)=>{ const option=document.createElement('option'); option.value=String(index); option.textContent=order.orderId; select.append(option); });
   select.value=String(state.orderIndex);
 }
 
@@ -218,22 +220,22 @@ async function loadAll(){
       fetchValues(CONFIG.warehouseSheetId,CONFIG.sheets.lookup), fetchValues(CONFIG.varietySheetId,CONFIG.sheets.variety), fetchValues(CONFIG.warehouseSheetId,sourceName)
     ]);
     state.lookup=buildLookup(lookupValues); state.variety=buildVariety(varietyValues); state.orders=parseOrders(orderValues); state.orderIndex=0; state.itemIndex=0; state.undo=[];
-    filterOrders(); setStatus(`${state.orders.length} orders`,'ok'); $('lastUpdated').textContent=`Updated ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`;
+    syncOrderList(); setStatus(`${state.orders.length} orders`,'ok'); $('lastUpdated').textContent=`Updated ${new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}`;
   }catch(error){ console.error(error); setStatus('Load failed','error'); showError(error.message||'Warehouse data could not be loaded.'); state.orders=[]; state.filtered=[]; render(); }
   finally{ state.loading=false; $('btnRefresh').disabled=false; }
 }
 
 function setSource(source){
   state.source=source==='other'?'other':'orders'; try{localStorage.setItem(CONFIG.sourceKey,state.source);}catch{}
-  $('tabOrders').classList.toggle('active',state.source==='orders'); $('tabOther').classList.toggle('active',state.source==='other'); $('orderSearch').value=''; loadAll();
+  $('tabOrders').classList.toggle('active',state.source==='orders'); $('tabOther').classList.toggle('active',state.source==='other'); loadAll();
 }
 function wireEvents(){
   $('tabOrders').addEventListener('click',()=>setSource('orders')); $('tabOther').addEventListener('click',()=>setSource('other'));
-  $('btnRefresh').addEventListener('click',loadAll); $('orderSearch').addEventListener('input',filterOrders);
+  $('btnRefresh').addEventListener('click',loadAll);
   $('btnPrevOrder').addEventListener('click',()=>moveOrder(-1)); $('btnNextOrder').addEventListener('click',()=>moveOrder(1));
   $('orderSelect').addEventListener('change',event=>{state.orderIndex=Number(event.target.value)||0;state.itemIndex=0;render();});
   $('btnSkip').addEventListener('click',skipItem); $('btnUndo').addEventListener('click',undoLast); $('btnResetOrder').addEventListener('click',resetOrder); wireHold();
-  document.addEventListener('keydown',event=>{ if(event.target.matches('input,select')) return; if(event.key==='ArrowLeft') moveOrder(-1); if(event.key==='ArrowRight') moveOrder(1); if(event.key.toLowerCase()==='s') skipItem(); });
+  document.addEventListener('keydown',event=>{ if(event.target.matches('select')) return; if(event.key==='ArrowLeft') moveOrder(-1); if(event.key==='ArrowRight') moveOrder(1); if(event.key.toLowerCase()==='s') skipItem(); });
 }
 
 (function init(){
