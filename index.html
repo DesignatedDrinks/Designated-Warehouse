@@ -4,8 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Designated Warehouse</title>
-  <link rel="stylesheet" href="./style.css?v=51" />
+  <link rel="stylesheet" href="./style.css?v=52" />
 </head>
 <body>
   <header class="appHeader">
@@ -49,24 +51,31 @@
 
     <section id="picker" class="picker" hidden>
       <article class="pickCard">
-        <div class="productImageWrap"><img id="curImg" alt="Current product" draggable="false" /></div>
+        <div class="productImageWrap">
+          <img id="curImg" alt="Current product" draggable="false" decoding="async" fetchpriority="high" />
+        </div>
 
         <div class="pickDetails">
+          <button id="curQty" class="quantityButton" type="button" aria-label="Hold to mark item picked">
+            <span id="holdFill" class="holdFill" aria-hidden="true"></span>
+            <span class="quantityPrompt">PICK</span>
+            <span id="curQtyNumber" class="quantityNumber">—</span>
+            <span id="curQtyDone" class="quantityDone" hidden>✓<small>NEXT</small></span>
+            <span class="holdLabel">HOLD TO CONFIRM</span>
+          </button>
+
           <div class="pickText">
-            <div class="pickEyebrow">PICK THIS NOW</div>
-            <div id="locationBadge" class="locationBadge">—</div>
+            <div class="pickTitleRow">
+              <div>
+                <div class="pickEyebrow">PICK THIS NOW</div>
+                <div id="locationBadge" class="locationBadge">—</div>
+              </div>
+            </div>
             <h2 id="curTitle">Loading…</h2>
             <div id="curSub" class="pickMeta">—</div>
           </div>
 
-          <button id="curQty" class="quantityButton" type="button" aria-label="Hold to mark item picked">
-            <span id="holdFill" class="holdFill" aria-hidden="true"></span>
-            <span id="curQtyNumber" class="quantityNumber">—</span>
-            <span id="curQtyDone" class="quantityDone" hidden>✓<small>NEXT</small></span>
-            <span class="holdLabel">HOLD TO PICK</span>
-          </button>
-
-          <div id="missingLocation" class="warning" hidden>This product has no warehouse location. Add its locCode in ImageLookup column D.</div>
+          <div id="missingLocation" class="warning" hidden>This product has no warehouse location. Use maintenance to update its locCode.</div>
           <div class="actionRow">
             <button id="btnSkip" class="secondaryButton" type="button">Skip item</button>
             <button id="btnUndo" class="secondaryButton" type="button">Undo last</button>
@@ -74,15 +83,15 @@
         </div>
       </article>
 
-      <section class="nextSection">
+      <section class="nextSection deferredPanel">
         <div class="sectionHeading"><h3>Up next</h3><span id="remainingLabel">—</span></div>
         <div class="nextGrid">
-          <article class="nextCard"><div><strong id="n1Qty">—</strong><span id="n1Aisle">—</span></div><img id="n1Img" alt="Next product" draggable="false" /></article>
-          <article class="nextCard"><div><strong id="n2Qty">—</strong><span id="n2Aisle">—</span></div><img id="n2Img" alt="Following product" draggable="false" /></article>
+          <article class="nextCard"><div><strong id="n1Qty">—</strong><span id="n1Aisle">—</span></div><img id="n1Img" alt="Next product" draggable="false" loading="lazy" decoding="async" /></article>
+          <article class="nextCard"><div><strong id="n2Qty">—</strong><span id="n2Aisle">—</span></div><img id="n2Img" alt="Following product" draggable="false" loading="lazy" decoding="async" /></article>
         </div>
       </section>
 
-      <section class="orderListPanel">
+      <section class="orderListPanel deferredPanel">
         <div class="sectionHeading"><h3>Order list</h3><span>Tap an item to jump</span></div>
         <div id="listBody" class="listBody"></div>
         <button id="btnResetOrder" class="resetButton" type="button">Reset picked progress for this order</button>
@@ -99,9 +108,51 @@
     <div class="dockStatus">
       <span id="connectionStatus" class="statusPill loading">Loading</span>
       <span id="lastUpdated" class="lastUpdated">Not loaded</span>
+      <button id="btnMaintenance" class="maintenanceButton" type="button" aria-label="Hold for maintenance" title="Hold for maintenance">•••</button>
     </div>
   </nav>
 
-  <script src="./script.js?v=51"></script>
+  <div id="maintenanceOverlay" class="maintenanceOverlay" hidden>
+    <section class="maintenanceDialog" role="dialog" aria-modal="true" aria-labelledby="maintenanceTitle">
+      <div class="maintenanceHeader">
+        <div>
+          <div class="maintenanceEyebrow">WAREHOUSE MAINTENANCE</div>
+          <h2 id="maintenanceTitle">Update locCode</h2>
+        </div>
+        <button id="btnCloseMaintenance" class="closeButton" type="button" aria-label="Close maintenance">×</button>
+      </div>
+
+      <div class="maintenanceProduct">
+        <strong id="maintenanceProductTitle">—</strong>
+        <span id="maintenanceProductId">—</span>
+      </div>
+
+      <form id="locCodeForm">
+        <label class="maintenanceField">
+          <span>locCode</span>
+          <input id="locCodeInput" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" placeholder="A-01" maxlength="7" />
+        </label>
+
+        <label class="maintenanceField">
+          <span>Maintenance PIN</span>
+          <input id="maintenancePin" type="password" inputmode="numeric" autocomplete="off" placeholder="6-digit PIN" maxlength="12" />
+        </label>
+
+        <details id="endpointDetails" class="endpointDetails">
+          <summary>Endpoint setup</summary>
+          <label class="maintenanceField compactField">
+            <span>Apps Script web app URL</span>
+            <input id="locCodeEndpoint" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <p>This URL is saved only on this iPad.</p>
+        </details>
+
+        <div id="maintenanceMessage" class="maintenanceMessage" aria-live="polite"></div>
+        <button id="btnSaveLocCode" class="saveLocButton" type="submit">Save location</button>
+      </form>
+    </section>
+  </div>
+
+  <script src="./script.js?v=52"></script>
 </body>
 </html>
