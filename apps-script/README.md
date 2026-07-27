@@ -4,7 +4,7 @@ This folder prepares Designated Warehouse to move from a legacy Shopify custom a
 
 ## Chosen deployment model
 
-Designated Warehouse will remain a small no-login internal tool:
+Designated Warehouse remains a no-login internal tool:
 
 ```text
 Warehouse iPad / staff browser
@@ -73,7 +73,7 @@ Do not request write access, payment data, customer email or customer phone unle
 - Never deletes manual or discontinued rows.
 - Rebuilds the image preview formula in column C.
 - Includes `backupImageLookup()` to make a timestamped backup tab before the first production sync.
-- Includes an optional authenticated `getWarehouseData(mode)` method for a future private frontend; the current no-login GitHub Pages frontend does not need to use it.
+- Includes an optional authenticated `getWarehouseData(mode)` method for a possible future private frontend; the current no-login GitHub Pages frontend does not need it.
 
 ## What `ShopifyDevAppAuth.gs` does
 
