@@ -28,6 +28,32 @@ body {
   margin-top: 9px;
 }
 
+/* Make previous/next order controls easy to find without overpowering picking. */
+.orderControls .navButton {
+  border-color: #c9bbff;
+  background: var(--purple-soft);
+  color: var(--purple-dark);
+  box-shadow: inset 0 0 0 1px rgba(91, 47, 214, 0.05);
+}
+
+.orderControls .navButton:active:not(:disabled) {
+  background: var(--purple);
+  border-color: var(--purple);
+  color: #fff;
+}
+
+.orderControls .navButton:focus-visible {
+  outline: 3px solid rgba(91, 47, 214, 0.22);
+  outline-offset: 2px;
+}
+
+.orderControls .navButton:disabled {
+  background: #f3f0ff;
+  border-color: #ded7f7;
+  color: #9b8bd2;
+  opacity: 0.55;
+}
+
 .bottomDock {
   position: static;
   z-index: auto;
